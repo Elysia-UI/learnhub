@@ -1,0 +1,67 @@
+{
+  "checkedAt": "2026-10-27T14:25:45.369Z",
+  "catalog": {
+    "profiles": 29,
+    "posts": 112,
+    "courses": 20,
+    "questions": 30,
+    "resources": 50
+  },
+  "database": {
+    "profiles": 29,
+    "uniqueNames": 29,
+    "uniqueAvatars": 29,
+    "uniqueAvatarFiles": 29,
+    "firstPages": [
+      {
+        "category_id": "ai",
+        "items": 8,
+        "distinctAuthors": 8
+      },
+      {
+        "category_id": "campus",
+        "items": 8,
+        "distinctAuthors": 8
+      },
+      {
+        "category_id": "career",
+        "items": 8,
+        "distinctAuthors": 8
+      },
+      {
+        "category_id": "design",
+        "items": 8,
+        "distinctAuthors": 8
+      },
+      {
+        "category_id": "life",
+        "items": 8,
+        "distinctAuthors": 8
+      },
+      {
+        "category_id": "method",
+        "items": 8,
+        "distinctAuthors": 8
+      },
+      {
+        "category_id": "tech",
+        "items": 8,
+        "distinctAuthors": 8
+      }
+    ],
+    "posts": 112,
+    "uniquePostTitles": 112,
+    "uniquePostBodies": 112,
+    "oldTemplatePosts": 0,
+    "comments": 362,
+    "uniqueComments": 362,
+    "chapters": 80,
+    "uniqueChapterBodies": 80,
+    "uniquePostImages": 18,
+    "resourceFiles": 50,
+    "validFiles": 50,
+    "uniqueResourceBodies": 50,
+    "missingAssets": []
+  },
+  "passed": true
+}

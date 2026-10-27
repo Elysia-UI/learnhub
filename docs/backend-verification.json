@@ -1,0 +1,53 @@
+{
+  "checkedAt": "2026-10-27T14:25:48.179Z",
+  "database": "learnhub",
+  "version": "8.0.30-txsql",
+  "counts": {
+    "users": 31,
+    "posts": 113,
+    "post_comments": 364,
+    "courses": 20,
+    "course_chapters": 80,
+    "resources": 50,
+    "questions": 30,
+    "answers": 60
+  },
+  "minimums": {
+    "users": 30,
+    "posts": 100,
+    "post_comments": 300,
+    "courses": 20,
+    "course_chapters": 80,
+    "resources": 50,
+    "questions": 30,
+    "answers": 60
+  },
+  "integrity": {
+    "invalidReplies": 0,
+    "invalidAcceptedAnswers": 0,
+    "invalidProgress": 0,
+    "inconsistentPoints": 0,
+    "foreignKeys": 41
+  },
+  "files": {
+    "expected": 50,
+    "verified": 50,
+    "missingFiles": []
+  },
+  "onlyProjectPrivileges": true,
+  "migrations": [
+    {
+      "name": "001_core.sql",
+      "applied_at": "2026-10-27T12:37:33.019Z"
+    },
+    {
+      "name": "002_curated_courses.sql",
+      "applied_at": "2026-10-27T13:01:16.824Z"
+    },
+    {
+      "name": "003_resource_download_cleanup.sql",
+      "applied_at": "2026-10-27T13:17:25.634Z"
+    }
+  ],
+  "passed": true
+}
