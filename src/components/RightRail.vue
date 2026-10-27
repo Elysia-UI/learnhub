@@ -1,25 +1,31 @@
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { useCommunity } from '../stores/community';
 import { level, date } from '../services/format';
+import { api } from '../services/api';
 import SectionHead from './SectionHead.vue';
 import Avatar from './Avatar.vue';
 import Icon from './Icon.vue';
 const store = useCommunity();
-const leaders = computed(() =>
-  [...store.data.users]
-    .filter((u) => u.role !== 'admin')
-    .sort((a, b) => b.points - a.points)
-    .slice(0, 5),
+const leaders = ref<import('../data/types').User[]>([]),
+  topics = ref<[string, number][]>([]);
+async function loadRail() {
+  try {
+    const [r, t] = await Promise.all([
+      api<{ items: import('../data/types').User[] }>('/leaderboard?pageSize=5'),
+      api<[string, number][]>('/topics'),
+    ]);
+    leaders.value = r.items;
+    topics.value = t.slice(0, 6);
+  } catch {}
+}
+void loadRail();
+watch(
+  () => store.pending,
+  (n, old) => {
+    if (old > 0 && n === 0) void loadRail();
+  },
 );
-const topics = computed(() => {
-  const counts = new Map<string, number>();
-  store.data.posts.forEach((p) => p.tags.forEach((t) => counts.set(t, (counts.get(t) || 0) + 1)));
-  store.data.questions.forEach((q) =>
-    q.tags.forEach((t) => counts.set(t, (counts.get(t) || 0) + 1)),
-  );
-  return [...counts].sort((a, b) => b[1] - a[1]).slice(0, 6);
-});
 const stats = computed(() => [
   { label: '社区伙伴', value: store.data.stats?.users || 0, icon: 'Users', color: 'cyan' },
   { label: '精选课程', value: store.data.stats?.courses || 0, icon: 'Box', color: 'teal' },
@@ -84,7 +90,7 @@ const stats = computed(() => [
       <SectionHead title="社区公告" icon="Megaphone" color="#fb8524" to="/announcements" />
       <div class="notice-list">
         <button
-          v-for="notice in store.data.notices.slice(0, 4)"
+          v-for="notice in store.data.notices.filter((n) => n.status !== 'draft').slice(0, 4)"
           :key="notice.id"
           @click="store.modal = { type: 'notice', payload: notice }"
         >

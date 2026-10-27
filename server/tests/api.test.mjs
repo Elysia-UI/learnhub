@@ -1,6 +1,7 @@
 import { before, after, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { randomBytes } from 'node:crypto';
+import { createServer } from 'node:http';
 import { unlink, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { app } from '../app.mjs';
@@ -177,6 +178,16 @@ test('发帖与评论真正写入云数据库，独立客户端可重新读取',
   });
   assert.equal(result.status, 201, JSON.stringify(result.body));
   postId = result.body.data.id;
+  assert.equal(result.body.data.status, 'pending');
+  assert.equal((await client().call('/api/posts/' + postId)).status, 404);
+  assert.equal(
+    (await bob.call('/api/admin/posts/' + postId + '/review', 'POST', { approved: true })).status,
+    403,
+  );
+  assert.equal(
+    (await admin.call('/api/admin/posts/' + postId + '/review', 'POST', { approved: true })).status,
+    200,
+  );
   const comment = await bob.call(`/api/posts/${postId}/comments`, 'POST', {
     content: '这条评论通过后端写入云数据库，可以由其他客户端重新读取。',
   });
@@ -202,6 +213,11 @@ test('编辑和删除校验归属，回复必须属于当前帖子', async () =>
   assert.equal((await bob.call(`/api/posts/${postId}`, 'PATCH', body)).status, 403);
   assert.equal((await bob.call(`/api/posts/${postId}`, 'DELETE')).status, 403);
   assert.equal((await alice.call(`/api/posts/${postId}`, 'PATCH', body)).status, 200);
+  assert.equal((await client().call('/api/posts/' + postId)).status, 404);
+  assert.equal(
+    (await admin.call('/api/admin/posts/' + postId + '/review', 'POST', { approved: true })).status,
+    200,
+  );
   assert.equal(
     (
       await alice.call(`/api/posts/p1/comments`, 'POST', {
@@ -273,7 +289,198 @@ test('签到并发请求只记一次积分', async () => {
     [alice.id],
   );
   assert.equal(ledger.n, 1);
-  assert.equal(Number(ledger.total), 2);
+  const [rule] = await query("SELECT amount FROM point_rules WHERE code='checkin'");
+  assert.equal(Number(ledger.total), rule.amount);
+});
+test('全站 SQL 搜索覆盖五种实体，分类与公告支持编辑、停用和草稿发布', async () => {
+  for (const list of ['notices', 'comments', 'logs']) {
+    const r = await admin.call('/api/admin/lists/' + list + '?pageSize=1');
+    assert.equal(r.status, 200, JSON.stringify(r.body));
+    assert.ok(r.body.data.items.length <= 1);
+    assert.equal((await alice.call('/api/admin/lists/' + list)).status, 403);
+  }
+  assert.equal((await admin.call('/api/admin/activity')).status, 200);
+  const extra = [];
+  try {
+    let r = await admin.call('/api/admin/categories', 'POST', {
+      name: `审计${stamp}`,
+      description: '自动化测试临时分类',
+    });
+    assert.equal(r.status, 201);
+    const category = r.body.data.id;
+    extra.push(['categories', category]);
+    assert.equal(
+      (
+        await admin.call('/api/admin/categories/' + category, 'PATCH', {
+          description: '更新后的分类描述',
+          enabled: false,
+        })
+      ).status,
+      200,
+    );
+    r = await alice.call('/api/questions', 'POST', {
+      title: '停用分类不能发布新问题',
+      content: '这个问题用于验证分类已停用后是否阻止发布。',
+      category,
+      tags: [],
+    });
+    assert.equal(r.status, 400);
+    r = await admin.call('/api/admin/notices', 'POST', {
+      title: `草稿公告 ${stamp}`,
+      content: '这份临时公告用于验证编辑、草稿、发布和删除业务。',
+      type: '公告',
+      status: 'draft',
+    });
+    assert.equal(r.status, 201);
+    const id = r.body.data.id;
+    extra.push(['announcements', id]);
+    assert.ok(
+      !(await client().call('/api/announcements?pageSize=50')).body.data.items.some(
+        (n) => n.id === id,
+      ),
+    );
+    assert.equal(
+      (
+        await admin.call('/api/admin/notices/' + id, 'PATCH', {
+          title: `已发布公告 ${stamp}`,
+          status: 'published',
+          pinned: true,
+        })
+      ).status,
+      200,
+    );
+    assert.ok(
+      (await client().call('/api/announcements?pageSize=50')).body.data.items.some(
+        (n) => n.id === id && n.pinned,
+      ),
+    );
+    for (const type of ['帖子', '课程', '问答', '资源', '用户']) {
+      const spec = {
+        帖子: ['posts', 'title', "status='published'"],
+        课程: ['courses', 'title', '1=1'],
+        问答: ['questions', 'title', '1=1'],
+        资源: ['resources', 'title', "status='approved'"],
+        用户: ['users', 'name', "status='active'"],
+      }[type];
+      const [existing] = await query(
+        `SELECT ${spec[1]} AS text FROM ${spec[0]} WHERE ${spec[2]} LIMIT 1`,
+      );
+      const result = await client().call(
+        '/api/search?' + new URLSearchParams({ q: existing.text.slice(0, 4), type, pageSize: '2' }),
+      );
+      assert.equal(result.status, 200, JSON.stringify(result.body));
+      assert.ok(result.body.data.total > 0, type);
+      assert.ok(result.body.data.items.length <= 2);
+      assert.ok(result.body.data.items.every((x) => x.type === type));
+    }
+    const injection = await client().call('/api/search?q=' + encodeURIComponent("' OR 1=1 --"));
+    assert.equal(injection.body.data.total, 0);
+  } finally {
+    for (const [table, id] of extra) await query(`DELETE FROM ${table} WHERE id=?`, [id]);
+  }
+});
+test('悬赏真实冻结、余额检查、并发采纳只结算一次，未结算删除退款', async () => {
+  await alice.call('/api/checkins', 'POST');
+  const ids = [];
+  try {
+    const before = (await query('SELECT points FROM users WHERE id=?', [alice.id]))[0].points;
+    const body = {
+      title: `悬赏问题测试 ${stamp}`,
+      content: '请说明如何以事务保证积分悬赏只结算一次并留下完整记录。',
+      category: 'tech',
+      tags: [],
+      bounty: 1,
+    };
+    const key = `bounty-test-${stamp}`;
+    const first = await alice.call('/api/questions', 'POST', body, { 'Idempotency-Key': key });
+    assert.equal(first.status, 201, JSON.stringify(first.body));
+    const id = first.body.data.id;
+    ids.push(id);
+    assert.equal(
+      (await alice.call('/api/questions', 'POST', body, { 'Idempotency-Key': key })).body.data.id,
+      id,
+    );
+    assert.equal(
+      (await query('SELECT points FROM users WHERE id=?', [alice.id]))[0].points,
+      before - 1,
+    );
+    const a = await bob.call('/api/questions/' + id + '/answers', 'POST', {
+      content: '先锁定问题行，积分流水使用唯一事件键，更新余额和状态放在同一事务。',
+    });
+    assert.equal(a.status, 201);
+    const results = await Promise.all(
+      [1, 2, 3].map(() =>
+        alice.call('/api/questions/' + id + '/accept', 'POST', { answerId: a.body.data.id }),
+      ),
+    );
+    assert.ok(results.every((r) => r.status === 200));
+    assert.equal(
+      (await query('SELECT bounty_status FROM questions WHERE id=?', [id]))[0].bounty_status,
+      'paid',
+    );
+    const [ledger] = await query(
+      'SELECT COUNT(*) AS n,SUM(amount) AS amount FROM point_records WHERE user_id=? AND event_key=?',
+      [bob.id, 'bounty-paid:' + id],
+    );
+    assert.equal(ledger.n, 1);
+    assert.equal(Number(ledger.amount), 1);
+    const next = await alice.call('/api/questions', 'POST', body);
+    assert.equal(next.status, 201);
+    const refundId = next.body.data.id;
+    ids.push(refundId);
+    assert.equal((await alice.call('/api/questions/' + refundId, 'DELETE')).status, 200);
+    assert.equal(
+      (await query('SELECT points FROM users WHERE id=?', [alice.id]))[0].points,
+      before - 1,
+    );
+    const poor = await alice.call('/api/questions', 'POST', { ...body, bounty: 1000 });
+    assert.equal(poor.status, 409);
+  } finally {
+    for (const id of ids) await query('DELETE FROM questions WHERE id=?', [id]);
+  }
+});
+test('个人记录独立分页、精确导出、通知权限与真实成长榜', async () => {
+  for (const kind of [
+    'posts',
+    'questions',
+    'resources',
+    'learning',
+    'points',
+    'history',
+    'comments',
+    'answers',
+    'downloads',
+  ]) {
+    const r = await alice.call('/api/me/' + kind + '?pageSize=1');
+    assert.equal(r.status, 200, kind + JSON.stringify(r.body));
+    assert.ok(r.body.data.items.length <= 1);
+  }
+  const exported = await alice.call('/api/me/export?scopes=profile,points');
+  assert.equal(exported.status, 200);
+  assert.equal(exported.body.data.profile.id, alice.id);
+  assert.ok(!('posts' in exported.body.data));
+  assert.ok(!('password_hash' in exported.body.data.profile));
+  assert.equal((await alice.call('/api/me/export?scopes=sessions')).status, 400);
+  assert.equal((await client().call('/api/me/points')).status, 401);
+  const rank = await alice.call('/api/leaderboard?pageSize=2');
+  assert.equal(rank.status, 200);
+  assert.equal(rank.body.data.items.length, 2);
+  assert.ok(rank.body.data.total >= 30);
+  assert.ok(rank.body.data.myRank > 0);
+  const growth = await alice.call('/api/me/growth');
+  assert.equal(growth.status, 200);
+  assert.ok(Array.isArray(growth.body.data.badges));
+  const notes = await alice.call('/api/notifications?pageSize=1');
+  assert.equal(notes.status, 200);
+  const id = notes.body.data.items[0]?.id;
+  if (id) {
+    await bob.call('/api/notifications/' + id, 'DELETE');
+    assert.equal((await query('SELECT id FROM notifications WHERE id=?', [id])).length, 1);
+    await alice.call('/api/notifications/' + id + '/read', 'PATCH');
+    assert.equal((await query('SELECT is_read FROM notifications WHERE id=?', [id]))[0].is_read, 1);
+    await alice.call('/api/notifications/' + id, 'DELETE');
+    assert.equal((await query('SELECT id FROM notifications WHERE id=?', [id])).length, 0);
+  }
 });
 test('问答采纳必须由提问者执行且只奖励一次', async () => {
   let r = await alice.call('/api/questions', 'POST', {
@@ -364,6 +571,38 @@ test('教师权限、课程创建、章节唯一进度和归属检查', async ()
     400,
   );
 });
+test('课程评价必须报名，重复提交更新同一条并按真实评价计算评分', async () => {
+  const body = { rating: 4, content: '课程结构清楚，练习内容能够帮助我验证理解。' };
+  assert.equal((await bob.call('/api/courses/' + courseId + '/review', 'PUT', body)).status, 403);
+  assert.equal(
+    (await client().call('/api/courses/' + courseId + '/review', 'PUT', body)).status,
+    401,
+  );
+  for (const rating of [4, 5])
+    assert.equal(
+      (await alice.call('/api/courses/' + courseId + '/review', 'PUT', { ...body, rating })).status,
+      200,
+    );
+  const r = await client().call('/api/courses/' + courseId + '/reviews');
+  assert.equal(r.status, 200);
+  assert.equal(r.body.data.total, 1);
+  assert.equal(r.body.data.average, 5);
+  assert.equal((await query('SELECT rating FROM courses WHERE id=?', [courseId]))[0].rating, 5);
+  const chapters = await query('SELECT id FROM course_chapters WHERE course_id=?', [courseId]);
+  for (const ch of chapters)
+    await alice.call('/api/courses/' + courseId + '/progress', 'PUT', {
+      chapterId: ch.id,
+      completed: true,
+    });
+  const g = await alice.call('/api/me/growth');
+  assert.ok(g.body.data.badges.some((b) => b.name === '学有所成'));
+  assert.equal(
+    (await alice.call('/api/courses/' + courseId + '/review/' + r.body.data.items[0].id, 'DELETE'))
+      .status,
+    200,
+  );
+  assert.equal((await query('SELECT rating FROM courses WHERE id=?', [courseId]))[0].rating, 0);
+});
 test('资源上传校验、审核权限、实际文件下载与统计', async () => {
   function form(filename, content) {
     const data = new FormData();
@@ -408,6 +647,22 @@ test('资源上传校验、审核权限、实际文件下载与统计', async ()
   assert.equal(download.body, `Cloud-backed resource ${stamp}`);
   const [r] = await query('SELECT downloads FROM resources WHERE id=?', [resourceId]);
   assert.equal(r.downloads, 1);
+  const records = await alice.call('/api/me/downloads');
+  assert.ok(records.body.data.items.some((d) => d.resourceId === resourceId));
+  const updated = {
+    title: `更新资源 ${stamp}`,
+    description: '这是更新后的资源介绍，应该重新进入待审核状态。',
+    category: 'tech',
+    tags: [],
+  };
+  assert.equal((await bob.call('/api/resources/' + resourceId, 'PATCH', updated)).status, 403);
+  assert.equal((await alice.call('/api/resources/' + resourceId, 'PATCH', updated)).status, 200);
+  assert.equal((await alice.call('/api/resources/' + resourceId + '/download')).status, 403);
+  assert.equal(
+    (await admin.call('/api/admin/resources/' + resourceId + '/review', 'POST', { approved: true }))
+      .status,
+    200,
+  );
   assert.equal((await alice.call(`/api/admin/resources/${resourceId}`, 'DELETE')).status, 403);
   assert.equal((await admin.call(`/api/admin/resources/${resourceId}`, 'DELETE')).status, 200);
   assert.equal(
@@ -416,6 +671,110 @@ test('资源上传校验、审核权限、实际文件下载与统计', async ()
   );
   await assert.rejects(stat(path.join(storageDir, resourceKey)), { code: 'ENOENT' });
   assert.equal((await alice.call(`/api/resources/${resourceId}/download`)).status, 404);
+});
+test('AI 未配置提示、真实 SSE 协议调用、连续历史、失败重试、停止和归属检查', async () => {
+  const saved = Object.fromEntries(
+    ['AI_BASE_URL', 'AI_API_KEY', 'AI_MODEL'].map((k) => [k, process.env[k]]),
+  );
+  delete process.env.AI_API_KEY;
+  assert.equal((await alice.call('/api/ai/status')).body.data.configured, false);
+  assert.equal((await alice.call('/api/ai/chat', 'POST', {})).status, 503);
+  let calls = 0,
+    inputs = [],
+    retryFailed = false,
+    stopped;
+  const mock = createServer(async (req, res) => {
+    let body = '';
+    for await (const b of req) body += b;
+    const input = JSON.parse(body);
+    inputs.push(input);
+    calls++;
+    assert.equal(req.headers.authorization, 'Bearer test-only-not-a-real-key');
+    if (input.messages.at(-1).content === '失败重试测试' && !retryFailed) {
+      retryFailed = true;
+      res.writeHead(429);
+      res.end();
+      return;
+    }
+    res.writeHead(200, { 'Content-Type': 'text/event-stream' });
+    const emit = (x) => res.write('data: ' + JSON.stringify(x) + '\n\n');
+    if (input.messages.at(-1).content === '停止生成测试') {
+      emit({ choices: [{ delta: { content: '部分回答' } }] });
+      req.on('close', () => {
+        stopped = true;
+      });
+      return;
+    }
+    emit({ choices: [{ delta: { content: '测试模型返回：' } }] });
+    emit({ choices: [{ delta: { content: input.messages.at(-1).content } }] });
+    emit({ choices: [{ delta: {}, finish_reason: 'stop' }] });
+    res.end('data: [DONE]\n\n');
+  });
+  await new Promise((resolve) => mock.listen(0, '127.0.0.1', resolve));
+  process.env.AI_BASE_URL = `http://127.0.0.1:${mock.address().port}/v1`;
+  process.env.AI_API_KEY = 'test-only-not-a-real-key';
+  process.env.AI_MODEL = 'test-model';
+  let id;
+  try {
+    const made = await alice.call('/api/ai/conversations', 'POST', {});
+    assert.equal(made.status, 201);
+    id = made.body.data.id;
+    const send = (content, requestKey) =>
+      alice.call('/api/ai/conversations/' + id + '/messages', 'POST', { content, requestKey });
+    let r = await send('第一条学习问题', 'ai-first-' + stamp);
+    assert.equal(r.status, 200);
+    assert.ok(r.body.includes('测试模型返回'));
+    assert.ok(r.body.includes('"type":"done"'));
+    await send('第一条学习问题', 'ai-first-' + stamp);
+    assert.equal(calls, 1);
+    r = await send('第二条学习问题', 'ai-second-' + stamp);
+    assert.ok(r.body.includes('done'));
+    assert.ok(
+      inputs
+        .at(-1)
+        .messages.some((m) => m.role === 'assistant' && m.content.includes('第一条学习问题')),
+    );
+    r = await send('失败重试测试', 'ai-retry-' + stamp);
+    assert.ok(r.body.includes('"type":"error"'));
+    r = await send('失败重试测试', 'ai-retry-' + stamp);
+    assert.ok(r.body.includes('"type":"done"'));
+    assert.equal((await bob.call('/api/ai/conversations/' + id)).status, 404);
+    const pending = send('停止生成测试', 'ai-stop-' + stamp);
+    for (let i = 0; i < 40; i++) {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      const row = (
+        await query(
+          "SELECT status FROM ai_messages WHERE conversation_id=? AND request_key=? AND role='assistant'",
+          [id, 'ai-stop-' + stamp],
+        )
+      )[0];
+      if (row?.status === 'pending') {
+        await alice.call('/api/ai/conversations/' + id + '/stop', 'POST');
+        break;
+      }
+    }
+    r = await pending;
+    assert.ok(r.body.includes('cancelled'));
+    const history = await alice.call('/api/ai/conversations/' + id);
+    assert.equal(history.status, 200);
+    assert.equal(
+      history.body.data.messages.filter(
+        (m) => m.requestKey === 'ai-retry-' + stamp && m.role === 'user',
+      ).length,
+      1,
+    );
+    assert.equal(history.body.data.messages.at(-1).status, 'cancelled');
+    assert.equal((await alice.call('/api/ai/conversations/' + id, 'DELETE')).status, 200);
+    assert.equal((await alice.call('/api/ai/conversations/' + id)).status, 404);
+  } finally {
+    if (id) await query('DELETE FROM ai_conversations WHERE id=?', [id]);
+    mock.closeAllConnections();
+    await new Promise((resolve) => mock.close(resolve));
+    for (const [k, v] of Object.entries(saved)) {
+      if (v === undefined) delete process.env[k];
+      else process.env[k] = v;
+    }
+  }
 });
 test('管理员封禁会撤销会话，启用后可重新登录', async () => {
   assert.equal(

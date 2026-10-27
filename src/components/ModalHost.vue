@@ -165,7 +165,11 @@ const {
                 <div class="form-row">
                   <label class="field"
                     >所属分类<select v-model="form.category">
-                      <option v-for="c in store.data.categories" :key="c.id" :value="c.id">
+                      <option
+                        v-for="c in store.data.categories.filter((c) => c.enabled !== false)"
+                        :key="c.id"
+                        :value="c.id"
+                      >
                         {{ c.name }}
                       </option>
                     </select></label
@@ -182,6 +186,19 @@ const {
                     </select></label
                   >
                 </div>
+                <label
+                  v-if="store.modal.type === 'question' && !store.modal.payload?.id"
+                  class="field"
+                  >悬赏积分（可选）<input
+                    v-model.number="form.bounty"
+                    type="number"
+                    min="0"
+                    :max="Math.min(1000, store.currentUser?.points || 0)"
+                  /><small
+                    >发布时扣除并冻结，采纳后发给回答者。当前可用
+                    {{ store.currentUser?.points || 0 }} 积分。</small
+                  ></label
+                >
                 <label v-if="store.modal.type === 'course'" class="field"
                   >副标题<input
                     v-model="form.subtitle"

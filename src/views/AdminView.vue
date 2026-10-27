@@ -1,8 +1,10 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { useCommunity } from '../stores/community';
 import { dayKey } from '../services/storage';
 import { roleName, timeAgo } from '../services/format';
+import { api } from '../services/api';
+import Pagination from '../components/Pagination.vue';
 import Icon from '../components/Icon.vue';
 import Avatar from '../components/Avatar.vue';
 import EmptyState from '../components/EmptyState.vue';
@@ -14,7 +16,10 @@ const store = useCommunity(),
   noticeContent = ref(''),
   noticeType = ref('公告'),
   categoryName = ref(''),
-  categoryDescription = ref('');
+  categoryDescription = ref(''),
+  categoryEdit = ref(''),
+  noticeEdit = ref(''),
+  noticeStatus = ref('published');
 const tabs = [
   { id: 'overview', label: '数据概览', icon: 'ChartNoAxesCombined' },
   { id: 'users', label: '用户管理', icon: 'Users' },
@@ -49,9 +54,7 @@ const stats = computed(() => [
 const allComments = computed(() =>
   store.data.posts.flatMap((p) => p.comments.map((c) => ({ ...c, post: p }))),
 );
-const filteredUsers = computed(() =>
-  store.data.users.filter((u) => `${u.name} ${u.bio}`.includes(query.value)),
-);
+const filteredUsers = computed(() => adminItems.value);
 function confirm(title: string, content: string, action: () => unknown) {
   store.modal = {
     type: 'confirm',
@@ -71,23 +74,34 @@ async function setRole(id: string, value: string) {
 }
 async function publishNotice() {
   try {
-    await store.adminChange('/notices', 'POST', {
-      title: noticeTitle.value.trim(),
-      content: noticeContent.value.trim(),
-      type: noticeType.value,
-    });
+    await store.adminChange(
+      noticeEdit.value ? '/notices/' + noticeEdit.value : '/notices',
+      noticeEdit.value ? 'PATCH' : 'POST',
+      {
+        title: noticeTitle.value.trim(),
+        content: noticeContent.value.trim(),
+        type: noticeType.value,
+        status: noticeStatus.value,
+      },
+    );
     noticeTitle.value = '';
     noticeContent.value = '';
+    noticeEdit.value = '';
   } catch {}
 }
 async function addCategory() {
   try {
-    await store.adminChange('/categories', 'POST', {
-      name: categoryName.value.trim(),
-      description: categoryDescription.value.trim(),
-    });
+    await store.adminChange(
+      categoryEdit.value ? '/categories/' + categoryEdit.value : '/categories',
+      categoryEdit.value ? 'PATCH' : 'POST',
+      {
+        name: categoryName.value.trim(),
+        description: categoryDescription.value.trim(),
+      },
+    );
     categoryName.value = '';
     categoryDescription.value = '';
+    categoryEdit.value = '';
   } catch {}
 }
 async function ruleChange(key: string, event: Event) {
@@ -108,6 +122,84 @@ async function pinNotice(id: string, pinned: boolean) {
     await store.adminChange('/notices/' + id, 'PATCH', { pinned });
   } catch {}
 }
+const reviewId = ref(''),
+  reviewReason = ref('');
+async function reviewPost(id: string, approved: boolean) {
+  try {
+    await store.adminChange('/posts/' + id + '/review', 'POST', {
+      approved,
+      reason: approved ? '' : reviewReason.value,
+    });
+    reviewId.value = '';
+    reviewReason.value = '';
+    await loadAdmin();
+  } catch {}
+}
+const adminStatus = ref(''),
+  adminSort = ref('latest'),
+  aiStatus = ref('正在检查模型配置');
+void api<{ configured: boolean; message: string }>('/ai/status')
+  .then((r) => (aiStatus.value = r.configured ? '模型服务已配置' : r.message))
+  .catch(() => (aiStatus.value = '暂时无法读取状态'));
+const adminPage = ref(1),
+  adminTotal = ref(0),
+  adminItems = ref<any[]>([]),
+  adminError = ref(''),
+  adminLoading = ref(false);
+const pagedTabs = [
+  'users',
+  'posts',
+  'courses',
+  'resources',
+  'questions',
+  'comments',
+  'logs',
+  'notices',
+];
+let sequence = 0;
+async function loadAdmin() {
+  if (!allowed.value || !pagedTabs.includes(tab.value)) return;
+  const n = ++sequence;
+  adminLoading.value = true;
+  adminError.value = '';
+  try {
+    const r = await api<{ items: any[]; users: any[]; total: number }>(
+      (['comments', 'logs', 'notices'].includes(tab.value) ? '/admin/lists/' : '/admin/catalog/') +
+        tab.value +
+        '?' +
+        new URLSearchParams({
+          page: String(adminPage.value),
+          q: query.value,
+          status: adminStatus.value,
+          sort: adminSort.value,
+        }),
+    );
+    if (n !== sequence) return;
+    adminItems.value = r.items;
+    adminTotal.value = r.total;
+    store.hydrate(
+      r,
+      ['posts', 'questions', 'courses', 'resources'].includes(tab.value)
+        ? (tab.value as any)
+        : undefined,
+    );
+  } catch (e) {
+    adminError.value = (e as Error).message;
+  } finally {
+    if (n === sequence) adminLoading.value = false;
+  }
+}
+watch([tab, query, allowed, adminStatus, adminSort], () => {
+  if (adminPage.value === 1) void loadAdmin();
+  else adminPage.value = 1;
+});
+watch(adminPage, () => void loadAdmin());
+watch(
+  () => store.pending,
+  (n, old) => {
+    if (old > 0 && n === 0) void loadAdmin();
+  },
+);
 </script>
 <template>
   <div class="full-page admin-page">
@@ -143,6 +235,7 @@ async function pinNotice(id: string, pinned: boolean) {
           @click="
             tab = t.id;
             query = '';
+            adminStatus = '';
           "
         >
           <Icon :name="t.icon" :size="18" />{{ t.label
@@ -204,14 +297,39 @@ async function pinNotice(id: string, pinned: boolean) {
         <section v-else class="panel admin-data-panel">
           <div class="section-head">
             <h2>{{ tabs.find((t) => t.id === tab)?.label }}</h2>
-            <label
-              v-if="['users', 'posts', 'courses', 'resources', 'questions'].includes(tab)"
-              class="inline-search"
+            <label v-if="pagedTabs.includes(tab)" class="inline-search"
               ><Icon name="Search" :size="15" /><input
                 v-model="query"
                 placeholder="输入关键词筛选"
                 aria-label="筛选管理内容"
             /></label>
+          </div>
+          <div
+            v-if="['posts', 'resources', 'users', 'courses', 'questions'].includes(tab)"
+            class="content-toolbar"
+          >
+            <label class="field" v-if="['posts', 'resources', 'users'].includes(tab)"
+              >状态<select v-model="adminStatus">
+                <option value="">全部状态</option>
+                <template v-if="tab === 'posts'"
+                  ><option value="pending">待审核</option>
+                  <option value="published">已发布</option>
+                  <option value="rejected">已驳回</option></template
+                ><template v-else-if="tab === 'resources'"
+                  ><option value="pending">待审核</option>
+                  <option value="approved">已通过</option>
+                  <option value="rejected">已拒绝</option></template
+                ><template v-else
+                  ><option value="active">正常</option>
+                  <option value="banned">停用</option></template
+                >
+              </select></label
+            ><label class="field"
+              >排序<select v-model="adminSort">
+                <option value="latest">最新</option>
+                <option value="hot">热度 / 积分</option>
+              </select></label
+            >
           </div>
           <div v-if="tab === 'users'" class="table-scroll">
             <table>
@@ -278,10 +396,7 @@ async function pinNotice(id: string, pinned: boolean) {
             </table>
           </div>
           <div v-else-if="tab === 'posts'" class="admin-rows">
-            <article
-              v-for="p in store.data.posts.filter((p) => p.title.includes(query))"
-              :key="p.id"
-            >
+            <article v-for="p in adminItems" :key="p.id">
               <div>
                 <RouterLink :to="`/forum/${p.id}`"
                   ><strong>{{ p.title }}</strong></RouterLink
@@ -290,11 +405,36 @@ async function pinNotice(id: string, pinned: boolean) {
                   {{ store.user(p.authorId).name }} · {{ p.comments.length }} 条评论 ·
                   {{ timeAgo(p.createdAt) }}
                 </p>
+                <span class="tag" :class="p.status === 'published' ? 'tag-green' : 'tag-orange'">{{
+                  { published: '已发布', pending: '待审核', rejected: '已驳回' }[
+                    p.status as 'published'
+                  ]
+                }}</span>
+                <p v-if="p.reviewReason">{{ p.reviewReason }}</p>
                 <span v-if="p.pinned" class="tag tag-orange">置顶</span
                 ><span v-if="p.featured" class="tag tag-red">精华</span>
               </div>
               <div class="row-actions">
-                <button class="text-link" @click="pinPost(p.id, 'pinned', !p.pinned)">
+                <button
+                  v-if="p.status !== 'published'"
+                  class="text-link"
+                  @click="reviewPost(p.id, true)"
+                >
+                  通过审核</button
+                ><button
+                  v-if="p.status !== 'rejected'"
+                  class="text-danger"
+                  @click="reviewId = p.id"
+                >
+                  驳回</button
+                ><label v-if="reviewId === p.id" class="field"
+                  >驳回原因<input v-model="reviewReason" maxlength="500" /><button
+                    class="btn btn-secondary btn-sm"
+                    @click="reviewPost(p.id, false)"
+                  >
+                    确认驳回
+                  </button></label
+                ><button class="text-link" @click="pinPost(p.id, 'pinned', !p.pinned)">
                   {{ p.pinned ? '取消置顶' : '置顶' }}</button
                 ><button class="text-link" @click="pinPost(p.id, 'featured', !p.featured)">
                   {{ p.featured ? '取消精华' : '精华' }}</button
@@ -308,7 +448,7 @@ async function pinNotice(id: string, pinned: boolean) {
             </article>
           </div>
           <div v-else-if="tab === 'comments'" class="admin-rows">
-            <article v-for="c in allComments" :key="c.id">
+            <article v-for="c in adminItems" :key="c.id">
               <div>
                 <strong>{{ c.content }}</strong>
                 <p>{{ store.user(c.authorId).name }} · 来自 {{ c.post.title }}</p>
@@ -320,16 +460,13 @@ async function pinNotice(id: string, pinned: boolean) {
                 删除
               </button>
             </article>
-            <EmptyState v-if="!allComments.length" title="暂时没有评论" />
+            <EmptyState v-if="!adminItems.length" title="暂时没有评论" />
           </div>
           <div v-else-if="tab === 'courses'" class="admin-rows">
             <button class="btn btn-primary btn-sm" @click="store.modal = { type: 'course' }">
               <Icon name="Plus" :size="15" />创建课程
             </button>
-            <article
-              v-for="c in store.data.courses.filter((c) => c.title.includes(query))"
-              :key="c.id"
-            >
+            <article v-for="c in adminItems" :key="c.id">
               <div>
                 <RouterLink :to="`/courses/${c.id}`"
                   ><strong>{{ c.title }}</strong></RouterLink
@@ -353,12 +490,7 @@ async function pinNotice(id: string, pinned: boolean) {
             </article>
           </div>
           <div v-else-if="tab === 'resources'" class="admin-rows">
-            <article
-              v-for="r in store.data.resources
-                .filter((r) => r.title.includes(query))
-                .sort((a, b) => Number(b.status === 'pending') - Number(a.status === 'pending'))"
-              :key="r.id"
-            >
+            <article v-for="r in adminItems" :key="r.id">
               <div>
                 <RouterLink :to="`/resources/${r.id}`"
                   ><strong>{{ r.title }}</strong></RouterLink
@@ -374,7 +506,9 @@ async function pinNotice(id: string, pinned: boolean) {
                         : 'tag-red'
                   "
                   >{{
-                    { approved: '已通过', pending: '待审核', rejected: '已拒绝' }[r.status]
+                    { approved: '已通过', pending: '待审核', rejected: '已拒绝' }[
+                      r.status as 'approved'
+                    ]
                   }}</span
                 >
               </div>
@@ -398,10 +532,7 @@ async function pinNotice(id: string, pinned: boolean) {
             </article>
           </div>
           <div v-else-if="tab === 'questions'" class="admin-rows">
-            <article
-              v-for="q in store.data.questions.filter((q) => q.title.includes(query))"
-              :key="q.id"
-            >
+            <article v-for="q in adminItems" :key="q.id">
               <div>
                 <RouterLink :to="`/questions/${q.id}`"
                   ><strong>{{ q.title }}</strong></RouterLink
@@ -411,7 +542,9 @@ async function pinNotice(id: string, pinned: boolean) {
                   {{ q.acceptedId ? '已解决' : '待解决' }}
                 </p>
               </div>
-              <button
+              <button class="text-link" @click="store.modal = { type: 'question', payload: q }">
+                编辑</button
+              ><button
                 class="text-danger"
                 @click="
                   confirm('删除问题及回答？', q.title, () =>
@@ -436,12 +569,47 @@ async function pinNotice(id: string, pinned: boolean) {
                   v-model="categoryDescription"
                   maxlength="100"
                   placeholder="一句话介绍这个分区" /></label
-              ><button class="btn btn-primary btn-sm">添加分类</button>
+              ><button class="btn btn-primary btn-sm">
+                {{ categoryEdit ? '保存分类' : '添加分类' }}</button
+              ><button
+                v-if="categoryEdit"
+                type="button"
+                class="text-link"
+                @click="
+                  categoryEdit = '';
+                  categoryName = '';
+                  categoryDescription = '';
+                "
+              >
+                取消编辑
+              </button>
             </form>
             <div class="admin-rows">
               <article v-for="c in store.data.categories" :key="c.id">
                 <div>
-                  <strong>{{ c.name }}</strong>
+                  <strong
+                    >{{ c.name }}
+                    <span v-if="c.enabled === false" class="tag tag-orange">已停用</span></strong
+                  ><button
+                    class="text-link"
+                    @click="
+                      categoryEdit = c.id;
+                      categoryName = c.name;
+                      categoryDescription = c.description;
+                    "
+                  >
+                    编辑
+                  </button>
+                  <button
+                    class="text-link"
+                    @click="
+                      store.adminChange('/categories/' + c.id, 'PATCH', {
+                        enabled: c.enabled === false,
+                      })
+                    "
+                  >
+                    {{ c.enabled === false ? '启用' : '停用' }}
+                  </button>
                   <p>{{ c.description }}</p>
                 </div>
                 <button
@@ -485,16 +653,57 @@ async function pinNotice(id: string, pinned: boolean) {
                   maxlength="20000"
                   placeholder="支持 Markdown"
                 ></textarea></label
-              ><button class="btn btn-primary btn-sm">发布公告</button>
+              ><label class="field"
+                >发布状态<select v-model="noticeStatus">
+                  <option value="draft">草稿</option>
+                  <option value="published">公开发布</option>
+                </select></label
+              ><button class="btn btn-primary btn-sm">
+                {{ noticeEdit ? '保存公告' : '创建公告' }}</button
+              ><button
+                v-if="noticeEdit"
+                type="button"
+                class="text-link"
+                @click="
+                  noticeEdit = '';
+                  noticeTitle = '';
+                  noticeContent = '';
+                "
+              >
+                取消编辑
+              </button>
             </form>
             <div class="admin-rows">
-              <article v-for="n in store.data.notices" :key="n.id">
+              <article v-for="n in adminItems" :key="n.id">
                 <div>
-                  <strong>{{ n.title }}</strong>
+                  <strong
+                    >{{ n.title }}
+                    <span class="tag">{{ n.status === 'draft' ? '草稿' : '已发布' }}</span></strong
+                  >
                   <p>{{ n.type }} · {{ timeAgo(n.createdAt) }}</p>
                 </div>
                 <div class="row-actions">
-                  <button class="text-link" @click="pinNotice(n.id, !n.pinned)">
+                  <button
+                    class="text-link"
+                    @click="
+                      noticeEdit = n.id;
+                      noticeTitle = n.title;
+                      noticeContent = n.content;
+                      noticeType = n.type;
+                      noticeStatus = n.status || 'published';
+                    "
+                  >
+                    编辑</button
+                  ><button
+                    class="text-link"
+                    @click="
+                      store.adminChange('/notices/' + n.id, 'PATCH', {
+                        status: n.status === 'draft' ? 'published' : 'draft',
+                      })
+                    "
+                  >
+                    {{ n.status === 'draft' ? '发布' : '转为草稿' }}</button
+                  ><button class="text-link" @click="pinNotice(n.id, !n.pinned)">
                     {{ n.pinned ? '取消置顶' : '置顶' }}</button
                   ><button
                     class="text-danger"
@@ -536,7 +745,7 @@ async function pinNotice(id: string, pinned: boolean) {
               >
             </div></template
           ><template v-else-if="tab === 'logs'"
-            ><div v-for="log in store.data.logs" :key="log.id" class="admin-log">
+            ><div v-for="log in adminItems" :key="log.id" class="admin-log">
               <span class="log-dot"></span>
               <div>
                 <strong>{{ log.action }}</strong>
@@ -547,7 +756,7 @@ async function pinNotice(id: string, pinned: boolean) {
               </div>
             </div>
             <EmptyState
-              v-if="!store.data.logs.length"
+              v-if="!adminItems.length"
               title="管理操作会记录在这里"
               description="管理操作日志由服务端保存到云数据库。" /></template
           ><template v-else-if="tab === 'config'"
@@ -560,7 +769,9 @@ async function pinNotice(id: string, pinned: boolean) {
                 <span>身份认证 / 服务端权限</span
                 ><span class="tag tag-orange">服务端会话与角色权限</span>
               </div>
-              <div><span>AI 对话接口</span><span class="tag tag-orange">尚未接入</span></div>
+              <div>
+                <span>AI 对话接口</span><span class="tag tag-orange">{{ aiStatus }}</span>
+              </div>
               <div><span>资源文件大小</span><strong>服务端限制 10 MB</strong></div>
             </div>
             <div class="preview-info">
@@ -569,6 +780,11 @@ async function pinNotice(id: string, pinned: boolean) {
               >
             </div></template
           >
+          <p v-if="adminLoading" class="small-empty">正在加载…</p>
+          <p v-if="adminError" class="form-error">
+            {{ adminError }} <button @click="loadAdmin">重试</button>
+          </p>
+          <Pagination v-if="pagedTabs.includes(tab)" v-model="adminPage" :total="adminTotal" />
         </section>
       </div>
     </div>

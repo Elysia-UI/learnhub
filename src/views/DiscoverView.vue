@@ -1,8 +1,11 @@
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import { useCommunity } from '../stores/community';
 import { level, date } from '../services/format';
+import Pagination from '../components/Pagination.vue';
+import { api } from '../services/api';
+import { usePaged } from '../services/paged';
 import Icon from '../components/Icon.vue';
 import Avatar from '../components/Avatar.vue';
 const route = useRoute(),
@@ -33,16 +36,38 @@ const info = computed(
       },
     })[section.value],
 );
-const topics = computed(() => {
-  const tags = new Map<string, number>();
-  [...store.data.posts, ...store.data.questions].forEach((p) =>
-    p.tags.forEach((t) => tags.set(t, (tags.get(t) || 0) + 1)),
-  );
-  return [...tags].sort((a, b) => b[1] - a[1]);
-});
-const leaders = computed(() =>
-  [...store.data.users].filter((u) => u.role !== 'admin').sort((a, b) => b.points - a.points),
-);
+const topics = ref<[string, number][]>([]),
+  categories = ref<import('../data/types').Category[]>([]),
+  topLeaders = ref<import('../data/types').User[]>([]);
+const {
+  items: leaders,
+  total,
+  page,
+  loading,
+  error,
+  load,
+} = usePaged<import('../data/types').User>(() => '/leaderboard', [section]);
+const {
+  items: notices,
+  total: noticeTotal,
+  page: noticePage,
+  load: loadNotices,
+} = usePaged<import('../data/types').Notice>(() => '/announcements', [section]);
+async function loadCatalog() {
+  try {
+    const [tags, cats, top] = await Promise.all([
+      api<[string, number][]>('/topics'),
+      api<import('../data/types').Category[]>('/categories'),
+      api<{ items: import('../data/types').User[] }>('/leaderboard?pageSize=3'),
+    ]);
+    topics.value = tags;
+    categories.value = cats;
+    topLeaders.value = top.items;
+  } catch (e) {
+    store.notify((e as Error).message, 'error');
+  }
+}
+void loadCatalog();
 </script>
 <template>
   <div class="full-page">
@@ -55,7 +80,7 @@ const leaders = computed(() =>
     </div>
     <div v-if="section === 'categories'" class="discover-categories">
       <RouterLink
-        v-for="c in store.data.categories"
+        v-for="c in categories.filter((c) => c.enabled !== false)"
         :key="c.id"
         :to="`/forum?category=${c.id}`"
         class="panel category-discover-card"
@@ -67,8 +92,7 @@ const leaders = computed(() =>
         <h2>{{ c.name }}</h2>
         <p>{{ c.description }}</p>
         <div>
-          <span>{{ store.data.posts.filter((p) => p.category === c.id).length }} 篇讨论</span
-          ><Icon name="ArrowUpRight" :size="19" /></div
+          <span>{{ c.postCount || 0 }} 篇讨论</span><Icon name="ArrowUpRight" :size="19" /></div
       ></RouterLink>
     </div>
     <div v-else-if="section === 'topics'" class="topic-catalog">
@@ -85,7 +109,7 @@ const leaders = computed(() =>
     </div>
     <section v-else-if="section === 'announcements'" class="panel announcements-page">
       <button
-        v-for="notice in store.data.notices"
+        v-for="notice in notices"
         :key="notice.id"
         class="announcement-row"
         @click="store.modal = { type: 'notice', payload: notice }"
@@ -109,12 +133,13 @@ const leaders = computed(() =>
     <section v-else class="leaderboard-page">
       <div class="leaderboard-podium">
         <RouterLink
-          v-for="(person, i) in leaders.slice(0, 3)"
+          v-for="(person, i) in topLeaders"
           :key="person.id"
           :to="`/members/${person.id}`"
           class="panel podium-person"
           :class="`podium-${i}`"
-          ><span class="podium-rank"><Icon name="Trophy" :size="27" />{{ i + 1 }}</span
+          ><span class="podium-rank"
+            ><Icon name="Trophy" :size="27" />{{ (page - 1) * 8 + i + 1 }}</span
           ><Avatar :user="person" :size="72" />
           <h2>{{ person.name }}</h2>
           <span class="level-badge">Lv.{{ level(person.points) }}</span
@@ -136,5 +161,12 @@ const leaders = computed(() =>
         >
       </div>
     </section>
+    <Pagination v-if="section === 'leaderboard'" v-model="page" :total="total" /><Pagination
+      v-if="section === 'announcements'"
+      v-model="noticePage"
+      :total="noticeTotal"
+    />
+    <p v-if="loading && section === 'leaderboard'" class="small-empty">正在读取排行榜…</p>
+    <p v-if="error" class="form-error">{{ error }} <button @click="load">重试</button></p>
   </div>
 </template>

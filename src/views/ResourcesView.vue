@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
 import { useCommunity } from '../stores/community';
+import { usePaged } from '../services/paged';
 import Icon from '../components/Icon.vue';
 import ResourceCard from '../components/ResourceCard.vue';
 import EmptyState from '../components/EmptyState.vue';
@@ -10,25 +11,26 @@ const store = useCommunity(),
   keyword = ref(''),
   type = ref('全部格式'),
   sort = ref('最新发布'),
-  page = ref(1);
-const resources = computed(() =>
-  store.data.resources
-    .filter(
-      (r) =>
-        r.status === 'approved' &&
-        (category.value === 'all' || r.category === category.value) &&
-        (type.value === '全部格式' || r.type === type.value) &&
-        `${r.title} ${r.description} ${r.tags.join(' ')}`
-          .toLowerCase()
-          .includes(keyword.value.toLowerCase()),
-    )
-    .sort((a, b) =>
-      sort.value === '下载最多'
-        ? b.downloads - a.downloads
-        : +new Date(b.createdAt) - +new Date(a.createdAt),
-    ),
+  unusedPage = ref(1);
+const {
+  items: resources,
+  total,
+  page,
+  loading,
+  error,
+  load,
+} = usePaged<import('../data/types').Resource>(
+  () =>
+    '/resources?' +
+    new URLSearchParams({
+      category: category.value,
+      q: keyword.value,
+      format: type.value === '全部格式' ? '' : type.value,
+      sort: sort.value === '下载最多' ? 'hot' : 'latest',
+    }),
+  [category, keyword, type, sort],
+  'resources',
 );
-watch([category, keyword, type, sort], () => (page.value = 1));
 </script>
 <template>
   <div class="full-page">
@@ -64,7 +66,7 @@ watch([category, keyword, type, sort], () => (page.value = 1));
     <div class="category-pills">
       <button :class="{ active: category === 'all' }" @click="category = 'all'">全部资源</button
       ><button
-        v-for="c in store.data.categories"
+        v-for="c in store.data.categories.filter((c) => c.enabled !== false)"
         :key="c.id"
         :class="{ active: category === c.id }"
         @click="category = c.id"
@@ -74,7 +76,7 @@ watch([category, keyword, type, sort], () => (page.value = 1));
     </div>
     <div class="content-toolbar">
       <h2>
-        资源发现<span>{{ resources.length }} 份精选内容</span>
+        资源发现<span>{{ total }} 份精选内容</span>
       </h2>
       <div>
         <label class="inline-search"
@@ -94,19 +96,19 @@ watch([category, keyword, type, sort], () => (page.value = 1));
       </div>
     </div>
     <div v-if="resources.length" class="resource-catalog">
-      <ResourceCard
-        v-for="resource in resources.slice((page - 1) * 8, page * 8)"
-        :key="resource.id"
-        :resource="resource"
-      />
+      <ResourceCard v-for="resource in resources" :key="resource.id" :resource="resource" />
     </div>
     <section v-else class="panel">
+      <p v-if="loading" class="small-empty">正在读取…</p>
+      <p v-if="error" class="form-error">
+        {{ error }} <button class="text-link" @click="load">重试</button>
+      </p>
       <EmptyState
         title="还没有找到合适的资料"
         description="试试其他关键词，或分享你珍藏的学习资源。"
       />
     </section>
-    <Pagination v-model="page" :total="resources.length" />
+    <Pagination v-model="page" :total="total" />
     <div class="resource-sharing-note">
       <Icon name="ShieldCheck" :size="19" />
       <p>尊重知识，尊重原创。请分享有授权或自己整理的内容，上传资源将在审核通过后展示。</p>

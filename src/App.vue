@@ -200,7 +200,7 @@ onUnmounted(() => window.removeEventListener('keydown', shortcut));
         ><RouterLink to="/categories" :class="{ active: route.path === '/categories' }"
           ><Icon name="LayoutGrid" />全部分类</RouterLink
         ><RouterLink
-          v-for="category in store.data.categories"
+          v-for="category in store.data.categories.filter((c) => c.enabled !== false)"
           :key="category.id"
           :to="`/forum?category=${category.id}`"
           :class="{ active: route.path === '/forum' && route.query.category === category.id }"

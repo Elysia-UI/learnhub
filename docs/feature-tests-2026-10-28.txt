@@ -1,0 +1,44 @@
+
+> learnhub-community@1.0.0 test
+> vitest run && node --test --test-concurrency=1 server/tests/api.test.mjs
+
+
+ RUN  v3.2.7 /path/to/learnhub
+
+ ✓ tests/community.test.ts (8 tests) 16ms
+ ✓ tests/client.test.ts (6 tests) 53ms
+
+ Test Files  2 passed (2)
+      Tests  14 passed (14)
+   Start at  01:46:45
+   Duration  1.67s (transform 173ms, setup 0ms, collect 392ms, tests 69ms, environment 1.16s, prepare 159ms)
+
+✔ 真实注册、密码散列、登录状态与公共隐私边界 (4675.9992ms)
+✔ 服务端阻止游客写入、普通用户管理访问与 CSRF (396.3941ms)
+✔ 发帖与评论真正写入云数据库，独立客户端可重新读取 (2977.8997ms)
+✔ 编辑和删除校验归属，回复必须属于当前帖子 (3591.9506ms)
+✔ 点赞收藏使用唯一约束与幂等开关 (2278.6367ms)
+✔ 数据库分页、关键词查询和排序生效，注入字符串不改变查询结构 (1424.4582ms)
+✔ 签到并发请求只记一次积分 (1652.2019ms)
+✔ 全站 SQL 搜索覆盖五种实体，分类与公告支持编辑、停用和草稿发布 (9944.9692ms)
+✔ 悬赏真实冻结、余额检查、并发采纳只结算一次，未结算删除退款 (10154.5403ms)
+✔ 个人记录独立分页、精确导出、通知权限与真实成长榜 (7444.8282ms)
+✔ 问答采纳必须由提问者执行且只奖励一次 (3265.9668ms)
+✔ 教师权限、课程创建、章节唯一进度和归属检查 (5663.6362ms)
+✔ 课程评价必须报名，重复提交更新同一条并按真实评价计算评分 (5260.5809ms)
+✔ 资源上传校验、审核权限、实际文件下载与统计 (7100.3469ms)
+{"requestId":"39e11f66-0813-4f08-9935-3d1ba493bf2f","code":"REQUEST_FAILED","message":"API request failed"}
+✔ AI 未配置提示、真实 SSE 协议调用、连续历史、失败重试、停止和归属检查 (10539.4576ms)
+✔ 管理员封禁会撤销会话，启用后可重新登录 (2185.8772ms)
+✔ 密码修改和退出登录让旧会话失效 (1024.1134ms)
+Seed already applied; existing accounts and content preserved.
+Curated community data already applied; existing edits preserved.
+✔ 重复初始化保留已有业务记录，演示资源均有实际文件 (1592.6514ms)
+ℹ tests 18
+ℹ suites 0
+ℹ pass 18
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 83658.5414

@@ -18,6 +18,7 @@ export function useModalController() {
     level: '入门',
     email: '',
     password: '',
+    bounty: 0,
   });
   const form = ref(fresh()),
     register = ref(false),
@@ -125,6 +126,7 @@ export function useModalController() {
             title: form.value.title.trim(),
             content: form.value.content.trim(),
             category: form.value.category,
+            ...(!payload?.id ? { bounty: Number(form.value.bounty) } : {}),
             tags: form.value.tags
               .split(/[,，]/)
               .map((t) => t.trim())

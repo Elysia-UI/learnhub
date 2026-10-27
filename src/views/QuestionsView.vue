@@ -2,6 +2,7 @@
 import { computed, ref, watch } from 'vue';
 import { useCommunity } from '../stores/community';
 import { timeAgo } from '../services/format';
+import { usePaged } from '../services/paged';
 import Icon from '../components/Icon.vue';
 import Avatar from '../components/Avatar.vue';
 import RightRail from '../components/RightRail.vue';
@@ -11,25 +12,26 @@ const store = useCommunity(),
   filter = ref('全部问题'),
   category = ref('all'),
   keyword = ref(''),
-  page = ref(1);
-const questions = computed(() =>
-  store.data.questions
-    .filter(
-      (q) =>
-        (category.value === 'all' || q.category === category.value) &&
-        (filter.value !== '待解决' || !q.acceptedId) &&
-        (filter.value !== '已解决' || q.acceptedId) &&
-        `${q.title} ${q.content} ${q.tags.join(' ')}`
-          .toLowerCase()
-          .includes(keyword.value.toLowerCase()),
-    )
-    .sort((a, b) =>
-      filter.value === '热门问题'
-        ? b.views - a.views
-        : +new Date(b.createdAt) - +new Date(a.createdAt),
-    ),
+  unusedPage = ref(1);
+const {
+  items: questions,
+  total,
+  page,
+  loading,
+  error,
+  load,
+} = usePaged<import('../data/types').Question>(
+  () =>
+    '/questions?' +
+    new URLSearchParams({
+      category: category.value,
+      q: keyword.value,
+      sort: filter.value === '热门问题' ? 'hot' : 'latest',
+      solved: filter.value === '已解决' ? 'yes' : filter.value === '待解决' ? 'no' : '',
+    }),
+  [category, keyword, filter],
+  'questions',
 );
-watch([category, keyword, filter], () => (page.value = 1));
 </script>
 <template>
   <div class="page-grid">
@@ -85,11 +87,7 @@ watch([category, keyword, filter], () => (page.value = 1));
               placeholder="搜索问题"
           /></label>
         </div>
-        <article
-          v-for="q in questions.slice((page - 1) * 8, page * 8)"
-          :key="q.id"
-          class="question-row"
-        >
+        <article v-for="q in questions" :key="q.id" class="question-row">
           <div class="answer-count" :class="{ solved: q.acceptedId }">
             <strong>{{ q.answers.length }}</strong
             ><span>{{ q.acceptedId ? '已解决' : '回答' }}</span>
@@ -113,11 +111,15 @@ watch([category, keyword, filter], () => (page.value = 1));
             </div>
           </div>
         </article>
+        <p v-if="loading" class="small-empty">正在读取…</p>
+        <p v-if="error" class="form-error">
+          {{ error }} <button class="text-link" @click="load">重试</button>
+        </p>
         <EmptyState
           v-if="!questions.length"
           title="暂时没有找到相关问题"
           description="也许你的提问，就会成为另一个人的学习起点。"
-        /><Pagination v-model="page" :total="questions.length" />
+        /><Pagination v-model="page" :total="total" />
       </section>
     </div>
     <RightRail />

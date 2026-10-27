@@ -73,3 +73,11 @@ Vite preview 只预览产物，不能替代后端，/api 也需要代理。日�
 | 文件不可用     | 恢复与数据库匹配的私有文件目录                  |
 
 当前是本机前后端 + 真实云 MySQL，尚未发布应用至公网，也未完成生产 TLS、负载测试及备份恢复演练。
+
+## 本轮升级和 AI 配置
+
+已有数据环境先运行 `npm run db:migrate`，再运行 `node scripts/backfill-badges.mjs`，不清库。新环境 `npm run db:init` 会执行迁移和徽章补录。
+
+AI_BASE_URL、AI_API_KEY、AI_MODEL 在服务端 `.env` 配置后重启，使用兼容 `/chat/completions` 的 SSE 服务，详见 [功能补齐记录](feature-implementation.md)。当前未提供真实模型凭据，不能声称实际模型已验证。
+
+生产启动会拒绝未启用 TLS 的远程数据库连接。当前云端握手返回 HANDSHAKE_NO_SSL_SUPPORT，需先配置云数据库 TLS 和可信 CA；不得通过关闭证书校验绕过。

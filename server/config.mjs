@@ -66,6 +66,14 @@ const db = process.env.DB_HOST
 if (!db) throw new Error('尚未配置 LearnHub 数据库，请执行 npm run db:provision');
 if (db.database !== 'learnhub' && !/^learnhub_[a-z0-9_]+$/.test(db.database))
   throw new Error('拒绝连接非 LearnHub 数据库');
+if (
+  process.env.NODE_ENV === 'production' &&
+  !['127.0.0.1', 'localhost', '::1'].includes(db.host) &&
+  process.env.DB_SSL !== 'true'
+)
+  throw new Error(
+    '正式部署连接远程数据库必须配置 DB_SSL=true 和可信 CA，禁止使用明文公网数据库连接',
+  );
 export const config = {
   db: {
     ...db,

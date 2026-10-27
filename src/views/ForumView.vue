@@ -33,12 +33,15 @@ async function fetchPosts() {
       category: category.value,
       sort: sort.value === '最热' ? 'hot' : sort.value === '精华' ? 'featured' : 'latest',
     });
-    const result = await api<{ items: import('../data/types').Post[]; total: number }>(
-      '/posts?' + params,
-    );
+    const result = await api<{
+      items: import('../data/types').Post[];
+      users: any[];
+      total: number;
+    }>('/posts?' + params);
     if (number === requestNo) {
       posts.value = result.items;
       total.value = result.total;
+      store.hydrate(result, 'posts');
     }
   } catch (e) {
     if (number === requestNo) listError.value = (e as Error).message;
@@ -74,7 +77,7 @@ void fetchPosts();
         <button :class="{ active: category === 'all' }" @click="router.push('/forum')">
           全部讨论</button
         ><button
-          v-for="c in store.data.categories"
+          v-for="c in store.data.categories.filter((c) => c.enabled !== false)"
           :key="c.id"
           :class="{ active: category === c.id }"
           @click="router.push({ path: '/forum', query: { category: c.id } })"

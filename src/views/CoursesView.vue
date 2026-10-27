@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
 import { useCommunity } from '../stores/community';
+import { usePaged } from '../services/paged';
 import Icon from '../components/Icon.vue';
 import CourseCard from '../components/CourseCard.vue';
 import EmptyState from '../components/EmptyState.vue';
@@ -10,24 +11,26 @@ const store = useCommunity(),
   keyword = ref(''),
   difficulty = ref('全部难度'),
   sort = ref('推荐优先'),
-  page = ref(1);
-const courses = computed(() =>
-  store.data.courses
-    .filter(
-      (c) =>
-        (category.value === 'all' || c.category === category.value) &&
-        (difficulty.value === '全部难度' || c.level === difficulty.value) &&
-        `${c.title} ${c.description} ${c.tags.join(' ')}`
-          .toLowerCase()
-          .includes(keyword.value.toLowerCase()),
-    )
-    .sort((a, b) =>
-      sort.value === '最新发布'
-        ? +new Date(b.createdAt) - +new Date(a.createdAt)
-        : b.rating - a.rating,
-    ),
+  unusedPage = ref(1);
+const {
+  items: courses,
+  total,
+  page,
+  loading,
+  error,
+  load,
+} = usePaged<import('../data/types').Course>(
+  () =>
+    '/courses?' +
+    new URLSearchParams({
+      category: category.value,
+      q: keyword.value,
+      level: difficulty.value,
+      recommended: String(sort.value === '推荐优先'),
+    }),
+  [category, keyword, difficulty, sort],
+  'courses',
 );
-watch([category, keyword, difficulty, sort], () => (page.value = 1));
 </script>
 <template>
   <div class="full-page">
@@ -70,7 +73,7 @@ watch([category, keyword, difficulty, sort], () => (page.value = 1));
     <div class="category-pills">
       <button :class="{ active: category === 'all' }" @click="category = 'all'">全部课程</button
       ><button
-        v-for="c in store.data.categories"
+        v-for="c in store.data.categories.filter((c) => c.enabled !== false)"
         :key="c.id"
         :class="{ active: category === c.id }"
         @click="category = c.id"
@@ -80,7 +83,7 @@ watch([category, keyword, difficulty, sort], () => (page.value = 1));
     </div>
     <div class="content-toolbar">
       <h2>
-        发现好课程<span>{{ courses.length }} 门课程</span>
+        发现好课程<span>{{ total }} 门课程</span>
       </h2>
       <div>
         <label class="inline-search"
@@ -100,17 +103,16 @@ watch([category, keyword, difficulty, sort], () => (page.value = 1));
       </div>
     </div>
     <div v-if="courses.length" class="course-grid catalog-course-grid">
-      <CourseCard
-        v-for="course in courses.slice((page - 1) * 8, page * 8)"
-        :key="course.id"
-        :course="course"
-        detailed
-      />
+      <CourseCard v-for="course in courses" :key="course.id" :course="course" detailed />
     </div>
     <section v-else class="panel">
+      <p v-if="loading" class="small-empty">正在读取…</p>
+      <p v-if="error" class="form-error">
+        {{ error }} <button class="text-link" @click="load">重试</button>
+      </p>
       <EmptyState title="还没有找到这类课程" description="换一个分类，或试试更简短的关键词。" />
     </section>
-    <Pagination v-model="page" :total="courses.length" />
+    <Pagination v-model="page" :total="total" />
     <div class="learning-tip">
       <Icon name="Coffee" :size="20" /><span>学习不必急于求成，每一次专注都算数。</span>
     </div>

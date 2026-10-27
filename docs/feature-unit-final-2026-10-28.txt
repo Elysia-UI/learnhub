@@ -1,0 +1,15 @@
+
+> learnhub-community@1.0.0 test:unit
+> vitest run
+
+
+ RUN  v3.2.7 /path/to/learnhub
+
+ ✓ tests/community.test.ts (8 tests) 25ms
+ ✓ tests/client.test.ts (6 tests) 65ms
+
+ Test Files  2 passed (2)
+      Tests  14 passed (14)
+   Start at  01:50:22
+   Duration  1.99s (transform 198ms, setup 0ms, collect 445ms, tests 90ms, environment 1.34s, prepare 189ms)
+

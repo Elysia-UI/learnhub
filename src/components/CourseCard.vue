@@ -22,7 +22,7 @@ const store = useCommunity();
           ><Avatar :user="store.user(course.teacherId)" :size="19" />{{
             store.user(course.teacherId).name
           }}<span class="hours">· {{ course.hours }} 课时</span></span
-        ><span class="rating"><Icon name="Star" :size="13" />{{ course.rating }}</span>
+        ><span class="rating"><Icon name="Star" :size="13" />{{ course.rating || '待评价' }}</span>
       </div>
     </div></RouterLink
   >

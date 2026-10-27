@@ -39,6 +39,24 @@ it('网络失败有明确提示', async () => {
     message: '无法连接后端服务，请确认后端已启动',
   });
 });
+it('网络中断后的同一业务重试复用幂等标识，成功后的新操作使用新标识', async () => {
+  const ok = () => new Response(JSON.stringify({ data: { id: 'saved' } }), { status: 201 });
+  const fetcher = vi
+    .fn()
+    .mockRejectedValueOnce(new TypeError('disconnected'))
+    .mockImplementation(async () => ok());
+  vi.stubGlobal('fetch', fetcher);
+  const options = { method: 'POST', body: { title: '一次提问' } };
+  await expect(api('/questions', options)).rejects.toMatchObject({ status: 0 });
+  await api('/questions', options);
+  await api('/questions', options);
+  expect(fetcher.mock.calls[0]![1].headers['Idempotency-Key']).toBe(
+    fetcher.mock.calls[1]![1].headers['Idempotency-Key'],
+  );
+  expect(fetcher.mock.calls[2]![1].headers['Idempotency-Key']).not.toBe(
+    fetcher.mock.calls[1]![1].headers['Idempotency-Key'],
+  );
+});
 it('Markdown 不执行脚本、事件属性和危险协议', () => {
   const root = document.createElement('div');
   document.body.append(root);

@@ -6,7 +6,17 @@ import { readFile, writeFile, stat, unlink } from 'node:fs/promises';
 import path from 'node:path';
 import { storageDir } from '../config.mjs';
 import { query, transaction } from '../db.mjs';
-import { auth, validate, tagsSchema, idSchema, uid, assert, HttpError } from '../security.mjs';
+import {
+  auth,
+  owner,
+  validate,
+  tagsSchema,
+  idSchema,
+  uid,
+  assert,
+  HttpError,
+} from '../security.mjs';
+import { audit } from '../services/activity.mjs';
 export const resourceRoutes = Router();
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -102,7 +112,7 @@ resourceRoutes.post('/resources', auth, upload, async (req, res) => {
     req.body,
   );
   assert(
-    (await query('SELECT id FROM categories WHERE id=?', [v.category])).length,
+    (await query('SELECT id FROM categories WHERE id=? AND enabled=1', [v.category])).length,
     400,
     '分类不存在',
   );
@@ -181,4 +191,41 @@ resourceRoutes.put('/resources/:id/favorite', auth, async (req, res) => {
       req.user.id,
     ]);
   res.json({ data: { active } });
+});
+resourceRoutes.patch('/resources/:id', auth, async (req, res) => {
+  const v = validate(
+    z
+      .object({
+        title: z.string().trim().min(2).max(100),
+        description: z.string().trim().min(10).max(20000),
+        category: idSchema,
+        tags: tagsSchema,
+      })
+      .strict(),
+    req.body,
+  );
+  await transaction(async (c) => {
+    const [r] = await query('SELECT * FROM resources WHERE id=? FOR UPDATE', [req.params.id], c);
+    assert(r, 404, '资源不存在');
+    owner(req, r.author_id);
+    assert(
+      (await query('SELECT id FROM categories WHERE id=? AND enabled=1', [v.category], c)).length,
+      400,
+      '分类不存在或已停用',
+    );
+    await query(
+      'UPDATE resources SET title=?,description=?,category_id=?,tags=?,status=? WHERE id=?',
+      [
+        v.title,
+        v.description,
+        v.category,
+        JSON.stringify(v.tags),
+        req.user.role === 'admin' ? r.status : 'pending',
+        r.id,
+      ],
+      c,
+    );
+    if (req.user.role === 'admin') await audit(c, req.user.id, `编辑资源 ${r.id}`);
+  });
+  res.json({ data: { ok: true } });
 });

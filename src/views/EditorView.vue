@@ -1,21 +1,22 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useCommunity } from '../stores/community';
 import { readUpload } from '../services/files';
+import { api } from '../services/api';
 import Icon from '../components/Icon.vue';
 import Markdown from '../components/Markdown.vue';
 import EmptyState from '../components/EmptyState.vue';
 const store = useCommunity(),
   route = useRoute(),
   router = useRouter();
-const original = store.data.posts.find((p) => p.id === route.params.id);
-const title = ref(original?.title || ''),
-  content = ref(original?.content || ''),
-  category = ref(original?.category || 'tech'),
-  type = ref(original?.type || '讨论'),
-  tags = ref(original?.tags.join('，') || ''),
-  image = ref(original?.image || ''),
+const original = ref(store.data.posts.find((p) => p.id === route.params.id));
+const title = ref(original.value?.title || ''),
+  content = ref(original.value?.content || ''),
+  category = ref(original.value?.category || 'tech'),
+  type = ref(original.value?.type || '讨论'),
+  tags = ref(original.value?.tags.join('，') || ''),
+  image = ref(original.value?.image || ''),
   preview = ref(false),
   error = ref(''),
   editor = ref<HTMLTextAreaElement>(),
@@ -23,9 +24,13 @@ const title = ref(original?.title || ''),
 const authorized = computed(
   () =>
     store.currentUser &&
-    (!original || original.authorId === store.currentUser.id || store.currentUser.role === 'admin'),
+    (!original.value ||
+      original.value.authorId === store.currentUser.id ||
+      store.currentUser.role === 'admin'),
 );
-const draftKey = computed(() => `learnhub.draft.${store.currentUser?.id}.${original?.id || 'new'}`);
+const draftKey = computed(
+  () => `learnhub.draft.${store.currentUser?.id}.${original.value?.id || 'new'}`,
+);
 function saveDraft() {
   localStorage.setItem(
     draftKey.value,
@@ -102,7 +107,7 @@ async function submit() {
           .slice(0, 5),
         image: image.value || undefined,
       },
-      original?.id,
+      original.value?.id,
     );
     if (id) {
       localStorage.removeItem(draftKey.value);
@@ -112,6 +117,29 @@ async function submit() {
     error.value = (e as Error).message;
   }
 }
+const editorLoading = ref(false);
+watch(
+  () => route.params.id,
+  async (id) => {
+    if (!id) return;
+    editorLoading.value = true;
+    try {
+      const post = await api<import('../data/types').Post>('/posts/' + id);
+      original.value = post;
+      title.value = post.title;
+      content.value = post.content;
+      category.value = post.category;
+      type.value = post.type;
+      tags.value = post.tags.join('，');
+      image.value = post.image || '';
+    } catch (e) {
+      error.value = (e as Error).message;
+    } finally {
+      editorLoading.value = false;
+    }
+  },
+  { immediate: true },
+);
 </script>
 <template>
   <div class="editor-page">
@@ -139,7 +167,11 @@ async function submit() {
         />
         <div class="editor-controls">
           <select v-model="category" aria-label="帖子分类">
-            <option v-for="c in store.data.categories" :key="c.id" :value="c.id">
+            <option
+              v-for="c in store.data.categories.filter((c) => c.enabled !== false)"
+              :key="c.id"
+              :value="c.id"
+            >
               {{ c.name }}
             </option></select
           ><select v-model="type" aria-label="帖子类型">
@@ -212,7 +244,7 @@ async function submit() {
           <p><Icon name="ShieldCheck" :size="16" />友善交流，尊重原创。让每一次分享都有价值。</p>
           <div>
             <button type="button" class="btn btn-secondary" @click="saveDraft">保存草稿</button
-            ><button class="btn btn-primary" :disabled="busy || store.pending > 0">
+            ><button class="btn btn-primary" :disabled="editorLoading || busy || store.pending > 0">
               <Icon name="Send" :size="17" />{{ original ? '保存修改' : '发布帖子' }}
             </button>
           </div>

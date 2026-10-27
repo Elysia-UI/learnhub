@@ -11,6 +11,8 @@ export interface User {
   status: 'active' | 'banned';
 }
 export interface Category {
+  postCount?: number;
+  enabled?: boolean;
   id: string;
   name: string;
   icon: string;
@@ -40,7 +42,8 @@ export interface Post {
   featured: boolean;
   pinned: boolean;
   image?: string;
-  status: 'published' | 'pending';
+  status: 'published' | 'pending' | 'rejected';
+  reviewReason?: string;
 }
 export interface Chapter {
   id: string;
@@ -94,6 +97,7 @@ export interface Question {
   acceptedId?: string;
   favorites: string[];
   bounty: number;
+  bountyStatus?: 'none' | 'held' | 'paid' | 'refunded';
 }
 export interface Resource {
   id: string;
@@ -112,6 +116,7 @@ export interface Resource {
   filename: string;
 }
 export interface Notice {
+  status?: 'draft' | 'published';
   id: string;
   title: string;
   content: string;
@@ -137,6 +142,7 @@ export interface PointRecord {
   createdAt: string;
 }
 export interface Conversation {
+  kind?: 'draft' | 'chat';
   id: string;
   userId: string;
   title: string;

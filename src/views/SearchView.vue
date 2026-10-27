@@ -2,6 +2,7 @@
 import { computed, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useCommunity } from '../stores/community';
+import { api } from '../services/api';
 import Icon from '../components/Icon.vue';
 import PostRow from '../components/PostRow.vue';
 import ResourceCard from '../components/ResourceCard.vue';
@@ -20,35 +21,55 @@ const q = computed(() =>
     .trim()
     .toLowerCase(),
 );
-const results = computed(() => {
-  if (!q.value) return [];
-  const matches = (text: string) => text.toLowerCase().includes(q.value);
-  return [
-    ...store.data.posts
-      .filter(
-        (p) => p.status === 'published' && matches(`${p.title} ${p.content} ${p.tags.join(' ')}`),
-      )
-      .map((item) => ({ type: '帖子', item })),
-    ...store.data.courses
-      .filter((c) => matches(`${c.title} ${c.description} ${c.tags.join(' ')}`))
-      .map((item) => ({ type: '课程', item })),
-    ...store.data.questions
-      .filter((c) => matches(`${c.title} ${c.content} ${c.tags.join(' ')}`))
-      .map((item) => ({ type: '问答', item })),
-    ...store.data.resources
-      .filter(
-        (c) =>
-          c.status === 'approved' && matches(`${c.title} ${c.description} ${c.tags.join(' ')}`),
-      )
-      .map((item) => ({ type: '资源', item })),
-    ...store.data.users
-      .filter((c) => matches(`${c.name} ${c.bio}`))
-      .map((item) => ({ type: '用户', item })),
-  ];
+const results = ref<any[]>([]),
+  counts = ref<Record<string, number>>({}),
+  total = ref(0),
+  loading = ref(false),
+  error = ref(''),
+  sort = ref('latest');
+let sequence = 0;
+async function load() {
+  const n = ++sequence;
+  loading.value = true;
+  error.value = '';
+  try {
+    const r = await api<{
+      items: any[];
+      counts: Record<string, number>;
+      total: number;
+      users: any[];
+    }>(
+      '/search?' +
+        new URLSearchParams({
+          q: q.value,
+          type: tab.value,
+          page: String(page.value),
+          sort: sort.value,
+        }),
+    );
+    if (n !== sequence) return;
+    results.value = r.items;
+    counts.value = r.counts;
+    total.value = r.total;
+    store.hydrate(r);
+    for (const row of r.items) {
+      const kind = (
+        { 帖子: 'posts', 课程: 'courses', 问答: 'questions', 资源: 'resources' } as const
+      )[row.type as '帖子'];
+      if (kind) store.hydrate({ items: [row.item] }, kind);
+    }
+  } catch (e) {
+    if (n === sequence) error.value = (e as Error).message;
+  } finally {
+    if (n === sequence) loading.value = false;
+  }
+}
+watch([q, tab, sort], () => {
+  if (page.value !== 1) page.value = 1;
+  else void load();
 });
-const filtered = computed(() =>
-  results.value.filter((r) => tab.value === '全部' || r.type === tab.value),
-);
+watch(page, () => void load());
+void load();
 watch([q, tab], () => {
   page.value = 1;
   keyword.value = String(route.query.q || '');
@@ -84,18 +105,24 @@ watch([q, tab], () => {
         >
           {{ t
           }}<span>{{
-            t === '全部' ? results.length : results.filter((r) => r.type === t).length
+            t === '全部' ? Object.values(counts).reduce((a, b) => a + b, 0) : counts[t] || 0
           }}</span>
         </button>
       </div>
-      <p class="search-result-label" v-if="q">
-        “{{ route.query.q }}” 共找到 {{ filtered.length }} 条相关内容
+      <p v-if="loading" class="small-empty">正在搜索数据库…</p>
+      <p v-if="error" class="form-error">
+        {{ error }} <button class="text-link" @click="load">重试</button>
       </p>
-      <div
-        v-for="r in filtered.slice((page - 1) * 8, page * 8)"
-        :key="r.type + r.item.id"
-        class="search-result"
+      <label class="field"
+        >排序<select v-model="sort">
+          <option value="latest">最新</option>
+          <option value="hot">最热</option>
+        </select></label
       >
+      <p class="search-result-label" v-if="q">
+        “{{ route.query.q }}” 共找到 {{ total }} 条相关内容
+      </p>
+      <div v-for="r in results" :key="r.type + r.item.id" class="search-result">
         <span class="result-type">{{ r.type }}</span
         ><PostRow v-if="r.type === '帖子'" :post="r.item as any" />
         <div v-else-if="r.type === '课程'" class="search-course">
@@ -121,13 +148,13 @@ watch([q, tab], () => {
         /></RouterLink>
       </div>
       <EmptyState
-        v-if="!filtered.length"
+        v-if="!loading && !error && !total"
         :title="q ? '还没有找到相关内容' : '从一个关键词开始'"
         :description="
           q ? '换个关键词试试，可能会有新的发现。' : '输入课程、技术名词或学习话题，探索知学社区。'
         "
         icon="Search"
-      /><Pagination v-model="page" :total="filtered.length" />
+      /><Pagination v-model="page" :total="total" />
     </section>
   </div>
 </template>

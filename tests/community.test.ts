@@ -24,6 +24,39 @@ beforeEach(() => {
 });
 afterEach(() => vi.restoreAllMocks());
 describe('云数据库客户端状态', () => {
+  it('当前登录用户不依赖有上限的公共用户列表', async () => {
+    const user = { ...state().users[0]!, id: 'outside-public-list', name: '独立登录用户' };
+    request.mockResolvedValueOnce({
+      state: { ...state(), users: [] },
+      user,
+      csrfToken: 'csrf',
+      unreadCount: 701,
+    });
+    const store = useCommunity();
+    await store.initialize();
+    expect(store.currentUser?.id).toBe(user.id);
+    expect(store.user(user.id).name).toBe(user.name);
+    expect(store.unread).toBe(701);
+  });
+  it('写入成功后刷新失败不会把已保存的业务操作报告为失败', async () => {
+    request.mockResolvedValueOnce({ state: state(), user: { id: 'u1' }, csrfToken: 'csrf' });
+    const store = useCommunity();
+    await store.initialize();
+    request
+      .mockResolvedValueOnce({ id: 'saved-post' })
+      .mockRejectedValueOnce(new Error('刷新失败'));
+    expect(
+      await store.savePost({
+        title: '已提交审核的帖子',
+        content: '这篇帖子已经成功保存，只是页面数据重新读取失败。',
+        category: 'tech',
+        type: '分享',
+        tags: [],
+      }),
+    ).toBe('saved-post');
+    expect(store.toast?.text).toContain('已保存');
+    expect(store.pending).toBe(0);
+  });
   it('忽略旧的本地账号和业务数据，仅采用后端返回的用户', async () => {
     localStorage.setItem('learnhub.session', 'admin');
     localStorage.setItem('learnhub.frontend.v1', 'untrusted-local-data');

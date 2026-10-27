@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useCommunity } from '../stores/community';
 import { level, timeAgo, roleName, date } from '../services/format';
+import Pagination from '../components/Pagination.vue';
 import Icon from '../components/Icon.vue';
 import { api } from '../services/api';
 import Avatar from '../components/Avatar.vue';
@@ -33,67 +34,42 @@ const tabs = [
   { id: 'resources', label: '我的资源', icon: 'FolderOpen' },
   { id: 'favorites', label: '我的收藏', icon: 'Heart' },
   { id: 'growth', label: '成长记录', icon: 'ChartNoAxesCombined' },
+  { id: 'downloads', label: '下载记录', icon: 'Download' },
   { id: 'history', label: '浏览历史', icon: 'Clock3' },
   { id: 'settings', label: '账号设置', icon: 'Settings' },
 ];
-const posts = computed(() => store.data.posts.filter((p) => p.authorId === person.value?.id));
-const courses = computed(() =>
-  store.data.courses.filter((c) =>
-    store.data.enrollments.some((e) => e.courseId === c.id && e.userId === person.value?.id),
-  ),
-);
-const teaching = computed(() => store.data.courses.filter((c) => c.teacherId === person.value?.id));
-const questions = computed(() =>
-  store.data.questions.filter((q) => q.authorId === person.value?.id),
-);
-const answers = computed(() =>
-  store.data.questions.flatMap((q) =>
-    q.answers.filter((a) => a.authorId === person.value?.id).map((a) => ({ ...a, question: q })),
-  ),
-);
-const comments = computed(() =>
-  store.data.posts.flatMap((p) =>
-    p.comments.filter((c) => c.authorId === person.value?.id).map((c) => ({ ...c, post: p })),
-  ),
-);
-const resources = computed(() =>
-  store.data.resources.filter(
-    (r) => r.authorId === person.value?.id && (self.value || r.status === 'approved'),
-  ),
-);
-const records = computed(() => store.data.points.filter((p) => p.userId === person.value?.id));
+const pageItems = ref<any[]>([]),
+  pageTotal = ref(0),
+  pageLoading = ref(false),
+  pageError = ref(''),
+  pages = ref<Record<string, number>>({}),
+  growth = ref<any>(null),
+  summary = ref<any>({});
+const posts = computed(() => (effectiveTab.value === 'posts' ? pageItems.value : [])),
+  courses = computed(() => (effectiveTab.value === 'courses' ? pageItems.value : [])),
+  teaching = ref<import('../data/types').Course[]>([]),
+  questions = computed(() => (effectiveTab.value === 'questions' ? pageItems.value : [])),
+  answers = computed(() => (effectiveTab.value === 'answers' ? pageItems.value : [])),
+  comments = computed(() => (effectiveTab.value === 'comments' ? pageItems.value : [])),
+  resources = computed(() => (effectiveTab.value === 'resources' ? pageItems.value : [])),
+  records = computed(() => (effectiveTab.value === 'growth' ? pageItems.value : [])),
+  history = computed(() => (effectiveTab.value === 'history' ? pageItems.value : [])),
+  favoritePosts = computed(() => pageItems.value),
+  favoriteQuestions = computed(() => pageItems.value),
+  favoriteResources = computed(() => pageItems.value);
+const teachingPage = ref(1),
+  teachingTotal = ref(0);
+const completedCount = computed(() => growth.value?.stats?.completed || 0);
 const activity = computed(() =>
   Array.from({ length: 35 }, (_, i) => {
     const d = new Date();
     d.setDate(d.getDate() - 34 + i);
     const key = d.toLocaleDateString('sv-SE');
-    const count =
-      posts.value.filter((p) => p.createdAt.startsWith(key)).length +
-      answers.value.filter((a) => a.createdAt.startsWith(key)).length +
-      store.data.checkins.filter((c) => c.userId === person.value?.id && c.date === key).length;
-    return { key, count };
+    return {
+      key,
+      count: Number(growth.value?.activity?.find((a: any) => a.day === key)?.count || 0),
+    };
   }),
-);
-const history = computed(() =>
-  store.data.history
-    .filter((h) => h.userId === person.value?.id)
-    .sort((a, b) => +new Date(b.date) - +new Date(a.date))
-    .map((h) => store.data.posts.find((p) => p.id === h.postId))
-    .filter((p) => !!p),
-);
-const favoritePosts = computed(() =>
-  store.data.posts.filter((p) => p.favorites.includes(person.value?.id || '')),
-);
-const favoriteQuestions = computed(() =>
-  store.data.questions.filter((q) => q.favorites.includes(person.value?.id || '')),
-);
-const favoriteResources = computed(() =>
-  store.data.resources.filter((r) => r.favorites.includes(person.value?.id || '')),
-);
-const completedCount = computed(() =>
-  store.data.enrollments
-    .filter((e) => e.userId === person.value?.id)
-    .reduce((sum, e) => sum + e.completed.length, 0),
 );
 const visibleTabs = computed(() =>
   self.value
@@ -108,15 +84,21 @@ const effectiveTab = computed(() =>
 function chooseTab(id: string) {
   router.replace({ path: route.path, query: { tab: id } });
 }
-function exportData() {
-  const blob = new Blob([JSON.stringify(store.data, null, 2)], { type: 'application/json' }),
-    url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = 'learnhub-records.json';
-  a.click();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
-  store.notify('已导出当前学习记录');
+const exportScopes = ref(['profile', 'learning', 'points']);
+async function exportData() {
+  try {
+    const exported = await api('/me/export?scopes=' + exportScopes.value.join(','));
+    const blob = new Blob([JSON.stringify(exported, null, 2)], { type: 'application/json' }),
+      url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'learnhub-records.json';
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    store.notify('已按所选范围导出全部个人记录');
+  } catch (e) {
+    store.notify((e as Error).message, 'error');
+  }
 }
 async function changePassword() {
   passwordError.value = '';
@@ -137,6 +119,90 @@ async function changePassword() {
     passwordBusy.value = false;
   }
 }
+const pageKey = computed(() => effectiveTab.value + ':' + favoriteTab.value),
+  page = computed({
+    get: () => pages.value[pageKey.value] || 1,
+    set: (n: number) => (pages.value[pageKey.value] = n),
+  });
+let sequence = 0;
+async function loadProfile() {
+  if (!person.value) return;
+  const n = ++sequence;
+  pageLoading.value = true;
+  pageError.value = '';
+  try {
+    const t = effectiveTab.value,
+      kind =
+        t === 'favorites'
+          ? ({ 帖子: 'posts', 问题: 'questions', 资源: 'resources' } as const)[
+              favoriteTab.value as '帖子'
+            ]
+          : t;
+    if (t === 'settings') return;
+    const endpoint = self.value
+      ? t === 'courses'
+        ? '/me/learning'
+        : t === 'favorites'
+          ? '/me/favorites/' + kind
+          : t === 'growth'
+            ? '/me/points'
+            : '/me/' + kind
+      : '/members/' + person.value.id + '/' + kind;
+    const r = await api<{ items: any[]; total: number; users?: any[]; enrollments?: any[] }>(
+      endpoint + '?page=' + page.value,
+    );
+    if (n !== sequence) return;
+    pageItems.value = r.items;
+    pageTotal.value = r.total;
+    const entity = t === 'courses' ? 'courses' : t === 'history' ? 'posts' : kind;
+    if (['posts', 'questions', 'courses', 'resources'].includes(entity))
+      store.hydrate(r, entity as any);
+    else store.hydrate(r);
+    if (r.enrollments) store.data.enrollments = r.enrollments;
+    if (self.value) {
+      growth.value = await api('/me/growth');
+      if (['teacher', 'admin'].includes(person.value.role)) {
+        const taught = await api<{ items: any[]; total: number }>(
+          '/me/courses?page=' + teachingPage.value,
+        );
+        teaching.value = taught.items;
+        teachingTotal.value = taught.total;
+      }
+    }
+  } catch (e) {
+    if (n === sequence) pageError.value = (e as Error).message;
+  } finally {
+    if (n === sequence) pageLoading.value = false;
+  }
+}
+watch(
+  [effectiveTab, favoriteTab, page, teachingPage, () => person.value?.id],
+  () => void loadProfile(),
+  {
+    immediate: true,
+  },
+);
+watch(
+  () => store.pending,
+  (n, old) => {
+    if (old > 0 && n === 0) void loadProfile();
+  },
+);
+watch(
+  () => route.params.id,
+  async (id) => {
+    if (id) {
+      try {
+        const u = await api<import('../data/types').User & { stats: any }>('/members/' + id);
+        store.hydrate({ users: [u] });
+        summary.value = u.stats;
+      } catch (e) {
+        pageError.value = (e as Error).message;
+      }
+    }
+  },
+  { immediate: true },
+);
 </script>
 <template>
   <div v-if="person" class="full-page profile-page">
@@ -172,11 +238,11 @@ async function changePassword() {
           ><span>成长积分</span>
         </div>
         <div>
-          <strong>{{ posts.length }}</strong
+          <strong>{{ growth?.stats?.posts ?? summary.posts ?? posts.length }}</strong
           ><span>发表帖子</span>
         </div>
         <div>
-          <strong>{{ posts.reduce((sum, p) => sum + p.likes.length, 0) }}</strong
+          <strong>{{ growth?.stats?.likes ?? summary.likes ?? 0 }}</strong
           ><span>收获点赞</span>
         </div>
         <div v-if="self">
@@ -267,6 +333,7 @@ async function changePassword() {
                 <Icon name="Plus" :size="15" />创建课程
               </button>
             </div>
+            <Pagination v-model="teachingPage" :total="teachingTotal" />
             <div class="teaching-list">
               <div v-for="course in teaching" :key="course.id">
                 <RouterLink :to="`/courses/${course.id}`"
@@ -341,7 +408,11 @@ async function changePassword() {
                     ? 'tag-orange'
                     : 'tag-red'
               "
-              >{{ { approved: '已公开', pending: '待审核', rejected: '未通过' }[r.status] }}</span
+              >{{
+                { approved: '已公开', pending: '待审核', rejected: '未通过' }[
+                  r.status as 'approved'
+                ]
+              }}</span
             >
           </div>
           <EmptyState
@@ -404,23 +475,17 @@ async function changePassword() {
           </div>
           <h3 class="subheading">成就徽章</h3>
           <div class="badge-collection">
-            <div :class="{ unlocked: posts.length > 0 }">
-              <Icon name="Pencil" :size="26" /><strong>初次分享</strong
-              ><small>发表第一篇帖子</small>
+            <div v-for="b in growth?.badges || []" :key="b.name" class="unlocked">
+              <Icon name="Award" :size="26" /><strong>{{ b.name }}</strong
+              ><small>{{ date(b.earnedAt) }}</small>
             </div>
-            <div :class="{ unlocked: completedCount > 0 }">
-              <Icon name="BookOpen" :size="26" /><strong>学有所获</strong
-              ><small>完成第一个章节</small>
-            </div>
-            <div :class="{ unlocked: answers.some((a) => a.id === a.question.acceptedId) }">
-              <Icon name="Heart" :size="26" /><strong>助人为乐</strong><small>回答被采纳</small>
-            </div>
+            <p v-if="!growth?.badges?.length" class="muted">继续学习和分享，解锁你的第一枚徽章。</p>
           </div>
           <h3 class="subheading">积分明细</h3>
           <div v-for="p in records" :key="p.id" class="points-record">
             <span
               >{{ p.reason }}<small>{{ timeAgo(p.createdAt) }}</small></span
-            ><strong>+{{ p.amount }}</strong>
+            ><strong>{{ p.amount > 0 ? '+' : '' }}{{ p.amount }}</strong>
           </div>
           <p v-if="!records.length" class="small-empty">
             操作产生的积分记录会出现在这里。初始演示积分来自数据库中的关联积分记录。
@@ -441,6 +506,15 @@ async function changePassword() {
             v-if="!history.length"
             title="从一次好奇的点击开始"
             description="你看过的帖子会记录在这里。" /></template
+        ><template v-else-if="effectiveTab === 'downloads'"
+          ><RouterLink
+            v-for="d in pageItems"
+            :key="d.id"
+            :to="'/resources/' + d.resourceId"
+            class="profile-record"
+            ><Icon name="Download" :size="22" /><strong>{{ d.title }}</strong
+            ><time>{{ timeAgo(d.createdAt) }}</time></RouterLink
+          ><EmptyState v-if="!pageItems.length" title="还没有下载记录" /></template
         ><template v-else-if="effectiveTab === 'settings'"
           ><div class="settings-row">
             <div>
@@ -477,7 +551,24 @@ async function changePassword() {
           <div class="settings-row">
             <div>
               <strong>导出学习记录</strong>
-              <p>导出当前已读取的社区和学习记录</p>
+              <p>按勾选范围导出你的全部数据库记录</p>
+              <div class="category-pills">
+                <label
+                  v-for="(label, key) in {
+                    profile: '个人资料',
+                    posts: '帖子',
+                    questions: '问题',
+                    resources: '资源',
+                    learning: '课程和进度',
+                    favorites: '收藏',
+                    points: '积分',
+                    downloads: '下载',
+                  }"
+                  :key="key"
+                  ><input v-model="exportScopes" type="checkbox" :value="key" />{{ label }}</label
+                >
+              </div>
+              <p></p>
             </div>
             <button class="btn btn-secondary btn-sm" @click="exportData">
               <Icon name="Download" :size="15" />导出数据
@@ -518,6 +609,11 @@ async function changePassword() {
             >
           </div></template
         >
+        <p v-if="pageLoading" class="small-empty">正在读取个人记录…</p>
+        <p v-if="pageError" class="form-error">
+          {{ pageError }} <button class="text-link" @click="loadProfile">重试</button>
+        </p>
+        <Pagination v-if="effectiveTab !== 'settings'" v-model="page" :total="pageTotal" />
       </section>
     </div>
   </div>

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted, ref, watch } from 'vue';
+import { api } from '../services/api';
 import { useCommunity } from '../stores/community';
 import * as echarts from 'echarts/core';
 import { BarChart, LineChart } from 'echarts/charts';
@@ -15,6 +16,13 @@ echarts.use([
 ]);
 const el = ref<HTMLElement>(),
   store = useCommunity();
+const activity = ref<{ day: string; kind: string; count: number }[]>([]);
+async function load() {
+  try {
+    activity.value = await api('/admin/activity');
+    render();
+  } catch {}
+}
 let chart: echarts.ECharts | undefined, observer: ResizeObserver | undefined;
 function render() {
   const days = Array.from({ length: 7 }, (_, i) => {
@@ -55,7 +63,9 @@ function render() {
         name: '发表帖子',
         type: 'bar',
         barWidth: 14,
-        data: days.map((d) => store.data.posts.filter((p) => p.createdAt.startsWith(d)).length),
+        data: days.map((d) =>
+          Number(activity.value.find((r) => r.day === d && r.kind === 'posts')?.count || 0),
+        ),
         itemStyle: { color: '#7775fa', borderRadius: [4, 4, 0, 0] },
       },
       {
@@ -63,7 +73,9 @@ function render() {
         type: 'line',
         smooth: true,
         symbolSize: 7,
-        data: days.map((d) => store.data.questions.filter((q) => q.createdAt.startsWith(d)).length),
+        data: days.map((d) =>
+          Number(activity.value.find((r) => r.day === d && r.kind === 'questions')?.count || 0),
+        ),
         itemStyle: { color: '#32c5b5' },
         lineStyle: { width: 3 },
       },
@@ -71,6 +83,7 @@ function render() {
   });
 }
 onMounted(() => {
+  void load();
   if (el.value) {
     chart = echarts.init(el.value);
     render();
@@ -78,7 +91,13 @@ onMounted(() => {
     observer.observe(el.value);
   }
 });
-watch(() => [store.theme, store.data.posts.length, store.data.questions.length], render);
+watch(() => store.theme, render);
+watch(
+  () => store.pending,
+  (n, old) => {
+    if (old > 0 && n === 0) void load();
+  },
+);
 onUnmounted(() => {
   observer?.disconnect();
   chart?.dispose();

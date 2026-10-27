@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import { useCommunity } from '../stores/community';
 import { timeAgo } from '../services/format';
 import { uid } from '../services/storage';
+import { api } from '../services/api';
 import Icon from '../components/Icon.vue';
 import Avatar from '../components/Avatar.vue';
 import Markdown from '../components/Markdown.vue';
@@ -46,8 +47,37 @@ async function sendComment(answerId: string) {
     error.value = (e as Error).message;
   }
 }
+const detailError = ref(''),
+  detailLoading = ref(false);
+async function loadDetail() {
+  detailLoading.value = true;
+  detailError.value = '';
+  try {
+    const r = await api<{ item: any; users: any[] }>('/questions/' + route.params.id);
+    store.hydrate({ items: [r.item], users: r.users }, 'questions');
+  } catch (e) {
+    detailError.value = (e as Error).message;
+  } finally {
+    detailLoading.value = false;
+  }
+}
+watch(
+  () => route.params.id,
+  () => void loadDetail(),
+  { immediate: true },
+);
+watch(
+  () => store.pending,
+  (n, old) => {
+    if (old > 0 && n === 0) void loadDetail();
+  },
+);
 </script>
 <template>
+  <p v-if="detailLoading" class="small-empty">正在加载…</p>
+  <p v-if="detailError" class="form-error">
+    {{ detailError }} <button class="text-link" @click="loadDetail">重试</button>
+  </p>
   <div v-if="question" class="detail-grid">
     <div class="main-column">
       <RouterLink to="/questions" class="back-link"
@@ -77,6 +107,14 @@ async function sendComment(answerId: string) {
             <Icon name="Pencil" :size="18" />
           </button>
         </div>
+        <p v-if="question.bounty" class="preview-info">
+          <Icon name="Award" :size="18" />悬赏 {{ question.bounty }} 积分 ·
+          {{
+            question.bountyStatus === 'paid'
+              ? '已发放给最佳答案作者'
+              : '已从提问者积分中冻结，采纳时发放'
+          }}
+        </p>
         <Markdown :content="question.content" />
         <div class="article-tag-list">
           <span v-for="tag in question.tags" :key="tag"># {{ tag }}</span>

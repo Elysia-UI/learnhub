@@ -12,7 +12,7 @@ import {
   pageParams,
 } from '../security.mjs';
 import { postsDTO } from '../services/snapshot.mjs';
-import { award, notify, audit } from '../services/activity.mjs';
+import { award, notify, audit, once } from '../services/activity.mjs';
 export const forumRoutes = Router();
 const inputSchema = z
   .object({
@@ -45,9 +45,12 @@ async function postRecord(id, req, conn) {
   );
   return p;
 }
-forumRoutes.get('/categories', async (_req, res) =>
-  res.json({ data: await query('SELECT * FROM categories ORDER BY id') }),
-);
+forumRoutes.get('/categories', async (_req, res) => {
+  const rows = await query(
+    "SELECT c.*,(SELECT COUNT(*) FROM posts p WHERE p.category_id=c.id AND p.status='published') AS postCount FROM categories c ORDER BY id",
+  );
+  res.json({ data: rows.map((c) => ({ ...c, enabled: !!c.enabled })) });
+});
 forumRoutes.get('/posts', async (req, res) => {
   const f = pageParams(req.query),
     where = ["p.status='published'"],
@@ -71,8 +74,20 @@ forumRoutes.get('/posts', async (req, res) => {
     `SELECT p.* FROM posts p WHERE ${condition} ORDER BY p.pinned DESC,${order},p.id LIMIT ${f.pageSize} OFFSET ${(f.page - 1) * f.pageSize}`,
     args,
   );
+  const ids = [...new Set(rows.map((r) => r.author_id))];
+  const { publicUser } = await import('../security.mjs');
   res.json({
-    data: { items: await postsDTO(rows), total: n.n, page: f.page, pageSize: f.pageSize },
+    data: {
+      items: await postsDTO(rows),
+      users: ids.length
+        ? (await query(`SELECT * FROM users WHERE id IN (${ids.map(() => '?')})`, ids)).map(
+            publicUser,
+          )
+        : [],
+      total: n.n,
+      page: f.page,
+      pageSize: f.pageSize,
+    },
   });
 });
 forumRoutes.get('/posts/:id', async (req, res) => {
@@ -103,49 +118,58 @@ forumRoutes.post('/posts/:id/view', async (req, res) => {
 forumRoutes.post('/posts', auth, async (req, res) => {
   const v = validate(inputSchema, req.body);
   assert(
-    (await query('SELECT id FROM categories WHERE id=?', [v.category])).length,
+    (await query('SELECT id FROM categories WHERE id=? AND enabled=1', [v.category])).length,
     400,
     '分类不存在',
   );
-  const id = uid('post');
-  await transaction(async (c) => {
-    await query(
-      'INSERT INTO posts(id,author_id,category_id,title,content,tags,type,image) VALUES(?,?,?,?,?,?,?,?)',
-      [
-        id,
-        req.user.id,
-        v.category,
-        v.title,
-        v.content,
-        JSON.stringify(v.tags),
-        v.type,
-        v.image || null,
-      ],
-      c,
-    );
-    await award(c, req.user.id, 'post', `post:${id}`, '发布帖子');
-  });
-  res.status(201).json({ data: { id } });
+  const result = await transaction(async (c) =>
+    once(req, c, async () => {
+      const id = uid('post'),
+        status = req.user.role === 'admin' ? 'published' : 'pending';
+      await query(
+        'INSERT INTO posts(id,author_id,category_id,title,content,tags,type,image,status) VALUES(?,?,?,?,?,?,?,?,?)',
+        [
+          id,
+          req.user.id,
+          v.category,
+          v.title,
+          v.content,
+          JSON.stringify(v.tags),
+          v.type,
+          v.image || null,
+          status,
+        ],
+        c,
+      );
+      if (status === 'published') await award(c, req.user.id, 'post', `post:${id}`, '发布帖子');
+      return { id, status };
+    }),
+  );
+  res.status(201).json({ data: result });
 });
 forumRoutes.patch('/posts/:id', auth, async (req, res) => {
   const v = validate(inputSchema, req.body),
     p = await postRecord(req.params.id, req);
   owner(req, p.author_id);
   assert(
-    (await query('SELECT id FROM categories WHERE id=?', [v.category])).length,
+    (await query('SELECT id FROM categories WHERE id=? AND enabled=1', [v.category])).length,
     400,
     '分类不存在',
   );
-  await query('UPDATE posts SET category_id=?,title=?,content=?,tags=?,type=?,image=? WHERE id=?', [
-    v.category,
-    v.title,
-    v.content,
-    JSON.stringify(v.tags),
-    v.type,
-    v.image || null,
-    p.id,
-  ]);
-  res.json({ data: { id: p.id } });
+  await query(
+    "UPDATE posts SET category_id=?,title=?,content=?,tags=?,type=?,image=?,status=?,review_reason='' WHERE id=?",
+    [
+      v.category,
+      v.title,
+      v.content,
+      JSON.stringify(v.tags),
+      v.type,
+      v.image || null,
+      req.user.role === 'admin' ? p.status : 'pending',
+      p.id,
+    ],
+  );
+  res.json({ data: { id: p.id, status: req.user.role === 'admin' ? p.status : 'pending' } });
 });
 forumRoutes.delete('/posts/:id', auth, async (req, res) => {
   const p = await postRecord(req.params.id, req);
@@ -164,6 +188,7 @@ forumRoutes.post('/posts/:id/comments', auth, async (req, res) => {
       req.body,
     ),
     p = await postRecord(req.params.id, req);
+  assert(p.status === 'published', 409, '帖子通过审核后才能评论');
   if (v.parentId)
     assert(
       (await query('SELECT id FROM post_comments WHERE id=? AND post_id=?', [v.parentId, p.id]))
@@ -172,40 +197,43 @@ forumRoutes.post('/posts/:id/comments', auth, async (req, res) => {
       '回复的评论不属于当前帖子',
     );
   const id = uid('comment');
-  await transaction(async (c) => {
-    await query(
-      'INSERT INTO post_comments(id,post_id,author_id,parent_id,content) VALUES(?,?,?,?,?)',
-      [id, p.id, req.user.id, v.parentId || null, v.content],
-      c,
-    );
-    await notify(
-      c,
-      p.author_id,
-      req.user.id,
-      '你的帖子有了新评论',
-      v.content,
-      'comment',
-      `/forum/${p.id}`,
-    );
-    if (v.parentId) {
-      const [parent] = await query(
-        'SELECT author_id FROM post_comments WHERE id=?',
-        [v.parentId],
+  const result = await transaction(async (c) =>
+    once(req, c, async () => {
+      await query(
+        'INSERT INTO post_comments(id,post_id,author_id,parent_id,content) VALUES(?,?,?,?,?)',
+        [id, p.id, req.user.id, v.parentId || null, v.content],
         c,
       );
-      if (parent.author_id !== p.author_id)
-        await notify(
+      await notify(
+        c,
+        p.author_id,
+        req.user.id,
+        '你的帖子有了新评论',
+        v.content,
+        'comment',
+        `/forum/${p.id}`,
+      );
+      if (v.parentId) {
+        const [parent] = await query(
+          'SELECT author_id FROM post_comments WHERE id=?',
+          [v.parentId],
           c,
-          parent.author_id,
-          req.user.id,
-          '你的评论有了新回复',
-          v.content,
-          'reply',
-          `/forum/${p.id}`,
         );
-    }
-  });
-  res.status(201).json({ data: { id } });
+        if (parent.author_id !== p.author_id)
+          await notify(
+            c,
+            parent.author_id,
+            req.user.id,
+            '你的评论有了新回复',
+            v.content,
+            'reply',
+            `/forum/${p.id}`,
+          );
+      }
+      return { id };
+    }),
+  );
+  res.status(201).json({ data: result });
 });
 forumRoutes.delete('/comments/:id', auth, async (req, res) => {
   const [c] = await query('SELECT * FROM post_comments WHERE id=?', [req.params.id]);
@@ -222,6 +250,7 @@ for (const kind of ['like', 'favorite'])
     const { active } = validate(z.object({ active: z.boolean() }).strict(), req.body),
       p = await postRecord(req.params.id, req),
       table = kind === 'like' ? 'post_likes' : 'post_favorites';
+    assert(p.status === 'published', 409, '帖子通过审核后才能互动');
     await transaction(async (c) => {
       if (active) {
         const result = await query(

@@ -73,6 +73,16 @@ async function copyLink() {
           ><span class="tag tag-green">{{ post.type }}</span>
         </div>
         <h1>{{ post.title }}</h1>
+        <div v-if="post.status !== 'published'" class="preview-info">
+          <Icon name="ShieldCheck" :size="20" /><span
+            >{{
+              post.status === 'pending'
+                ? '帖子正在审核，通过后公开展示。'
+                : '帖子未通过审核：' + post.reviewReason
+            }}
+            可以编辑后重新提交。</span
+          >
+        </div>
         <div class="article-author">
           <Avatar :user="store.user(post.authorId)" :size="42" />
           <div>
@@ -103,7 +113,7 @@ async function copyLink() {
             ># {{ tag }}</RouterLink
           >
         </div>
-        <div class="article-actions">
+        <div v-if="post.status === 'published'" class="article-actions">
           <button
             class="btn"
             :class="
@@ -129,7 +139,7 @@ async function copyLink() {
         <h2>
           一起聊聊<span>{{ post.comments.length }}</span>
         </h2>
-        <form class="comment-form" @submit.prevent="send">
+        <form v-if="post.status === 'published'" class="comment-form" @submit.prevent="send">
           <Avatar :user="store.currentUser" :size="38" />
           <div>
             <div v-if="replyTo" class="reply-indicator">
@@ -166,7 +176,7 @@ async function copyLink() {
             <p class="comment-text">{{ c.content }}</p>
             <div class="comment-meta">
               <time>{{ timeAgo(c.createdAt) }}</time
-              ><button @click="replyTo = c.id">回复</button
+              ><button v-if="post.status === 'published'" @click="replyTo = c.id">回复</button
               ><button
                 v-if="c.authorId === store.currentUser?.id || store.currentUser?.role === 'admin'"
                 @click="

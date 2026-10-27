@@ -14,6 +14,9 @@ const store = useCommunity();
     /></RouterLink>
     <div class="post-copy">
       <div class="post-title">
+        <span v-if="post.status !== 'published'" class="tag tag-orange">{{
+          post.status === 'pending' ? '待审核' : '已驳回'
+        }}</span>
         <RouterLink :to="`/forum/${post.id}`">{{ post.title }}</RouterLink
         ><span v-if="post.pinned" class="tag tag-orange">置顶</span
         ><span v-if="post.featured" class="tag tag-red">精华</span

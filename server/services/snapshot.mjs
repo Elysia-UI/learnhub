@@ -35,6 +35,7 @@ export async function postsDTO(rows) {
     featured: !!p.featured,
     pinned: !!p.pinned,
     status: p.status,
+    reviewReason: p.review_reason || '',
     createdAt: iso(p.created_at),
     likes: (ls.get(p.id) || []).map((r) => r.user_id),
     favorites: (fs.get(p.id) || []).map((r) => r.user_id),
@@ -48,9 +49,18 @@ export async function postsDTO(rows) {
   }));
 }
 export async function coursesDTO(rows) {
+  if (!rows.length) return [];
+  const ids = rows.map((r) => r.id),
+    clause = marks(ids);
   const [chapters, counts] = await Promise.all([
-    query('SELECT * FROM course_chapters ORDER BY course_id,position'),
-    query('SELECT course_id,COUNT(*) AS n FROM course_enrollments GROUP BY course_id'),
+    query(
+      `SELECT * FROM course_chapters WHERE course_id IN (${clause}) ORDER BY course_id,position`,
+      ids,
+    ),
+    query(
+      `SELECT course_id,COUNT(*) AS n FROM course_enrollments WHERE course_id IN (${clause}) GROUP BY course_id`,
+      ids,
+    ),
   ]);
   const ch = group(chapters, 'course_id'),
     ns = new Map(counts.map((r) => [r.course_id, r.n]));
@@ -79,11 +89,20 @@ export async function coursesDTO(rows) {
   }));
 }
 export async function questionsDTO(rows) {
+  if (!rows.length) return [];
+  const ids = rows.map((r) => r.id),
+    clause = marks(ids);
   const [answers, comments, likes, favorites] = await Promise.all([
-    query('SELECT * FROM answers ORDER BY created_at'),
-    query('SELECT * FROM answer_comments ORDER BY created_at'),
-    query('SELECT * FROM answer_likes'),
-    query('SELECT * FROM question_favorites'),
+    query(`SELECT * FROM answers WHERE question_id IN (${clause}) ORDER BY created_at`, ids),
+    query(
+      `SELECT c.* FROM answer_comments c JOIN answers a ON a.id=c.answer_id WHERE a.question_id IN (${clause}) ORDER BY c.created_at`,
+      ids,
+    ),
+    query(
+      `SELECT l.* FROM answer_likes l JOIN answers a ON a.id=l.answer_id WHERE a.question_id IN (${clause})`,
+      ids,
+    ),
+    query(`SELECT * FROM question_favorites WHERE question_id IN (${clause})`, ids),
   ]);
   const aa = group(answers, 'question_id'),
     cc = group(comments, 'answer_id'),
@@ -99,6 +118,7 @@ export async function questionsDTO(rows) {
     createdAt: iso(q.created_at),
     views: q.views,
     bounty: q.bounty,
+    bountyStatus: q.bounty_status,
     acceptedId: q.accepted_answer_id || undefined,
     favorites: (ff.get(q.id) || []).map((f) => f.user_id),
     answers: (aa.get(q.id) || []).map((a) => ({
@@ -117,7 +137,14 @@ export async function questionsDTO(rows) {
   }));
 }
 export async function resourcesDTO(rows) {
-  const favorites = group(await query('SELECT * FROM resource_favorites'), 'resource_id');
+  if (!rows.length) return [];
+  const favorites = group(
+    await query(
+      `SELECT * FROM resource_favorites WHERE resource_id IN (${marks(rows.map((r) => r.id))})`,
+      rows.map((r) => r.id),
+    ),
+    'resource_id',
+  );
   return rows.map((r) => ({
     id: r.id,
     title: r.title,
@@ -182,7 +209,10 @@ export async function snapshot(user) {
       "SELECT * FROM resources WHERE status='approved' OR author_id=? OR ?=1 ORDER BY created_at DESC LIMIT 500",
       [userId, Number(admin)],
     ).then(resourcesDTO),
-    query('SELECT * FROM announcements ORDER BY pinned DESC,created_at DESC LIMIT 100'),
+    query(
+      "SELECT * FROM announcements WHERE status='published' OR ?=1 ORDER BY pinned DESC,created_at DESC LIMIT 100",
+      [Number(admin)],
+    ),
     query('SELECT * FROM notifications WHERE user_id=? ORDER BY created_at DESC LIMIT 300', [
       userId,
     ]),
@@ -208,7 +238,7 @@ export async function snapshot(user) {
   return {
     version: 2,
     users: users.map(publicUser),
-    categories,
+    categories: categories.map((c) => ({ ...c, enabled: !!c.enabled })),
     posts,
     courses,
     questions,
@@ -219,6 +249,7 @@ export async function snapshot(user) {
       content: n.content,
       type: n.type,
       pinned: !!n.pinned,
+      status: n.status,
       createdAt: iso(n.created_at),
     })),
     notifications: notifications.map((n) => ({
@@ -264,6 +295,7 @@ export async function snapshot(user) {
       title: c.title,
       messages: json(c.messages),
       createdAt: iso(c.created_at),
+      kind: c.kind,
     })),
     stats: statistics,
   };

@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { query, transaction } from '../db.mjs';
 import { auth, role, owner, validate, tagsSchema, idSchema, uid, assert } from '../security.mjs';
-import { award, notify, audit } from '../services/activity.mjs';
+import { award, notify, audit, once, changePoints, syncBadges } from '../services/activity.mjs';
 export const learningRoutes = Router();
 const questionSchema = z
   .object({
@@ -10,26 +10,49 @@ const questionSchema = z
     content: z.string().trim().min(10).max(30000),
     category: idSchema,
     tags: tagsSchema,
+    bounty: z.number().int().min(0).max(1000).optional(),
   })
   .strict();
 async function categoryExists(id) {
-  assert((await query('SELECT id FROM categories WHERE id=?', [id])).length, 400, '分类不存在');
+  assert(
+    (await query('SELECT id FROM categories WHERE id=? AND enabled=1', [id])).length,
+    400,
+    '分类不存在或已停用',
+  );
 }
 learningRoutes.post('/questions', auth, async (req, res) => {
   const v = validate(questionSchema, req.body);
   await categoryExists(v.category);
-  const id = uid('question');
-  await query(
-    'INSERT INTO questions(id,author_id,category_id,title,content,tags) VALUES(?,?,?,?,?,?)',
-    [id, req.user.id, v.category, v.title, v.content, JSON.stringify(v.tags)],
+  const result = await transaction((c) =>
+    once(req, c, async () => {
+      const id = uid('question'),
+        bounty = v.bounty || 0;
+      if (bounty) await changePoints(c, req.user.id, -bounty, `bounty-hold:${id}`, '提问悬赏冻结');
+      await query(
+        'INSERT INTO questions(id,author_id,category_id,title,content,tags,bounty,bounty_status) VALUES(?,?,?,?,?,?,?,?)',
+        [
+          id,
+          req.user.id,
+          v.category,
+          v.title,
+          v.content,
+          JSON.stringify(v.tags),
+          bounty,
+          bounty ? 'held' : 'none',
+        ],
+        c,
+      );
+      return { id };
+    }),
   );
-  res.status(201).json({ data: { id } });
+  res.status(201).json({ data: result });
 });
 learningRoutes.patch('/questions/:id', auth, async (req, res) => {
   const v = validate(questionSchema, req.body),
     [q] = await query('SELECT * FROM questions WHERE id=?', [req.params.id]);
   assert(q, 404, '问题不存在');
   owner(req, q.author_id);
+  assert(v.bounty === undefined || v.bounty === q.bounty, 400, '发布后不能修改悬赏金额');
   await categoryExists(v.category);
   await query('UPDATE questions SET title=?,content=?,category_id=?,tags=? WHERE id=?', [
     v.title,
@@ -48,24 +71,27 @@ learningRoutes.post('/questions/:id/answers', auth, async (req, res) => {
     [q] = await query('SELECT * FROM questions WHERE id=?', [req.params.id]);
   assert(q, 404, '问题不存在');
   const id = uid('answer');
-  await transaction(async (c) => {
-    await query(
-      'INSERT INTO answers(id,question_id,author_id,content) VALUES(?,?,?,?)',
-      [id, q.id, req.user.id, v.content],
-      c,
-    );
-    await award(c, req.user.id, 'answer', `answer:${id}`, '回答问题');
-    await notify(
-      c,
-      q.author_id,
-      req.user.id,
-      '你的问题有了新回答',
-      q.title,
-      'answer',
-      `/questions/${q.id}`,
-    );
-  });
-  res.status(201).json({ data: { id } });
+  const result = await transaction(async (c) =>
+    once(req, c, async () => {
+      await query(
+        'INSERT INTO answers(id,question_id,author_id,content) VALUES(?,?,?,?)',
+        [id, q.id, req.user.id, v.content],
+        c,
+      );
+      await award(c, req.user.id, 'answer', `answer:${id}`, '回答问题');
+      await notify(
+        c,
+        q.author_id,
+        req.user.id,
+        '你的问题有了新回答',
+        q.title,
+        'answer',
+        `/questions/${q.id}`,
+      );
+      return { id };
+    }),
+  );
+  res.status(201).json({ data: result });
 });
 learningRoutes.post('/questions/:id/accept', auth, async (req, res) => {
   const v = validate(z.object({ answerId: idSchema }).strict(), req.body);
@@ -84,6 +110,10 @@ learningRoutes.post('/questions/:id/accept', auth, async (req, res) => {
     assert(a.author_id !== req.user.id, 400, '不能采纳自己的回答');
     await query('UPDATE questions SET accepted_answer_id=? WHERE id=?', [a.id, q.id], c);
     await award(c, a.author_id, 'accepted', `accepted:${q.id}`, '回答被采纳');
+    if (q.bounty_status === 'held') {
+      await changePoints(c, a.author_id, q.bounty, `bounty-paid:${q.id}`, '获得问题悬赏');
+      await query("UPDATE questions SET bounty_status='paid' WHERE id=?", [q.id], c);
+    }
     await notify(
       c,
       a.author_id,
@@ -101,23 +131,26 @@ learningRoutes.post('/answers/:id/comments', auth, async (req, res) => {
   const [a] = await query('SELECT * FROM answers WHERE id=?', [req.params.id]);
   assert(a, 404, '回答不存在');
   const id = uid('comment');
-  await transaction(async (c) => {
-    await query(
-      'INSERT INTO answer_comments(id,answer_id,author_id,content) VALUES(?,?,?,?)',
-      [id, a.id, req.user.id, v.content],
-      c,
-    );
-    await notify(
-      c,
-      a.author_id,
-      req.user.id,
-      '你的回答收到了评论',
-      v.content,
-      'comment',
-      `/questions/${a.question_id}`,
-    );
-  });
-  res.status(201).json({ data: { id } });
+  const result = await transaction(async (c) =>
+    once(req, c, async () => {
+      await query(
+        'INSERT INTO answer_comments(id,answer_id,author_id,content) VALUES(?,?,?,?)',
+        [id, a.id, req.user.id, v.content],
+        c,
+      );
+      await notify(
+        c,
+        a.author_id,
+        req.user.id,
+        '你的回答收到了评论',
+        v.content,
+        'comment',
+        `/questions/${a.question_id}`,
+      );
+      return { id };
+    }),
+  );
+  res.status(201).json({ data: result });
 });
 for (const [entity, table, column] of [
   ['questions', 'question_favorites', 'question_id'],
@@ -276,6 +309,7 @@ learningRoutes.put('/courses/:id/progress', auth, async (req, res) => {
       [v.chapterId, req.user.id, req.params.id],
       c,
     );
+    if (v.completed) await syncBadges(c, req.user.id);
   });
   res.json({ data: { ok: true } });
 });
@@ -317,7 +351,7 @@ learningRoutes.post('/ai/drafts', auth, async (req, res) => {
   const id = v.id || uid('draft');
   if (v.id) {
     const result = await query(
-      'UPDATE ai_conversations SET title=?,messages=? WHERE id=? AND user_id=?',
+      "UPDATE ai_conversations SET title=?,messages=? WHERE id=? AND user_id=? AND kind='draft'",
       [
         v.content.slice(0, 22) || '新的学习草稿',
         JSON.stringify(v.content ? [{ role: 'user', content: v.content }] : []),
@@ -336,12 +370,113 @@ learningRoutes.post('/ai/drafts', auth, async (req, res) => {
   res.json({ data: { id } });
 });
 learningRoutes.delete('/ai/drafts/:id', auth, async (req, res) => {
-  await query('DELETE FROM ai_conversations WHERE id=? AND user_id=?', [
+  await query("DELETE FROM ai_conversations WHERE id=? AND user_id=? AND kind='draft'", [
     req.params.id,
     req.user.id,
   ]);
   res.json({ data: { ok: true } });
 });
-learningRoutes.post('/ai/chat', auth, (_req, _res) => {
-  assert(false, 503, 'AI 服务尚未接入；学习草稿可以正常使用');
+learningRoutes.get('/courses/:id/reviews', async (req, res) => {
+  const { pageParams, publicUser } = await import('../security.mjs');
+  const f = pageParams(req.query),
+    [n] = await query(
+      'SELECT COUNT(*) AS n,COALESCE(AVG(rating),0) AS average FROM course_reviews WHERE course_id=?',
+      [req.params.id],
+    );
+  const rows = await query(
+    `SELECT r.*,u.name,u.avatar FROM course_reviews r JOIN users u ON u.id=r.user_id WHERE r.course_id=? ORDER BY r.created_at DESC,r.id LIMIT ${f.pageSize} OFFSET ${(f.page - 1) * f.pageSize}`,
+    [req.params.id],
+  );
+  res.json({
+    data: {
+      items: rows.map((r) => ({
+        id: r.id,
+        userId: r.user_id,
+        name: r.name,
+        avatar: r.avatar,
+        rating: r.rating,
+        content: r.content,
+        createdAt: r.created_at,
+      })),
+      total: Number(n.n),
+      average: Number(n.average),
+      page: f.page,
+      pageSize: f.pageSize,
+    },
+  });
+});
+learningRoutes.put('/courses/:id/review', auth, async (req, res) => {
+  const v = validate(
+    z
+      .object({
+        rating: z.number().int().min(1).max(5),
+        content: z.string().trim().min(5).max(2000),
+      })
+      .strict(),
+    req.body,
+  );
+  await transaction(async (c) => {
+    const [course] = await query('SELECT * FROM courses WHERE id=? FOR UPDATE', [req.params.id], c);
+    assert(course, 404, '课程不存在');
+    assert(course.teacher_id !== req.user.id, 403, '不能评价自己的课程');
+    assert(
+      (
+        await query(
+          'SELECT course_id FROM course_enrollments WHERE user_id=? AND course_id=?',
+          [req.user.id, course.id],
+          c,
+        )
+      ).length,
+      403,
+      '加入课程后才能评价',
+    );
+    await query(
+      'INSERT INTO course_reviews(id,course_id,user_id,rating,content) VALUES(?,?,?,?,?) ON DUPLICATE KEY UPDATE rating=VALUES(rating),content=VALUES(content)',
+      [uid('review'), course.id, req.user.id, v.rating, v.content],
+      c,
+    );
+    await query(
+      'UPDATE courses SET rating=(SELECT COALESCE(AVG(rating),0) FROM course_reviews WHERE course_id=?) WHERE id=?',
+      [course.id, course.id],
+      c,
+    );
+  });
+  res.json({ data: { ok: true } });
+});
+learningRoutes.delete('/courses/:id/review/:reviewId', auth, async (req, res) => {
+  await transaction(async (c) => {
+    await query('SELECT id FROM courses WHERE id=? FOR UPDATE', [req.params.id], c);
+    const [r] = await query(
+      'SELECT * FROM course_reviews WHERE id=? AND course_id=?',
+      [req.params.reviewId, req.params.id],
+      c,
+    );
+    assert(r, 404, '评价不存在');
+    owner(req, r.user_id);
+    await query('DELETE FROM course_reviews WHERE id=?', [r.id], c);
+    await query(
+      'UPDATE courses SET rating=(SELECT COALESCE(AVG(rating),0) FROM course_reviews WHERE course_id=?) WHERE id=?',
+      [req.params.id, req.params.id],
+      c,
+    );
+    if (req.user.role === 'admin') await audit(c, req.user.id, `删除课程评价 ${r.id}`);
+  });
+  res.json({ data: { ok: true } });
+});
+learningRoutes.delete('/questions/:id', auth, async (req, res) => {
+  await transaction(async (c) => {
+    const [q] = await query('SELECT * FROM questions WHERE id=? FOR UPDATE', [req.params.id], c);
+    assert(q, 404, '问题不存在');
+    owner(req, q.author_id);
+    assert(
+      req.user.role === 'admin' ||
+        !(await query('SELECT id FROM answers WHERE question_id=? LIMIT 1', [q.id], c)).length,
+      409,
+      '已有回答的问题请联系管理员处理',
+    );
+    if (q.bounty_status === 'held')
+      await changePoints(c, q.author_id, q.bounty, `bounty-refund:${q.id}`, '问题删除，退还悬赏');
+    await query('DELETE FROM questions WHERE id=?', [q.id], c);
+  });
+  res.json({ data: { ok: true } });
 });

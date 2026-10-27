@@ -26,6 +26,8 @@ export const useCommunity = defineStore('community', () => {
     sessionId = ref(''),
     theme = ref(localStorage.getItem('learnhub.theme') || 'light');
   const ready = ref(false),
+    identity = ref<User | null>(null),
+    unreadCount = ref<number | null>(null),
     loading = ref(false),
     loadError = ref(''),
     pending = ref(0);
@@ -33,10 +35,31 @@ export const useCommunity = defineStore('community', () => {
     modal = ref<{ type: string; payload?: any } | null>(null),
     mobileMenu = ref(false);
   let toastTimer: ReturnType<typeof setTimeout>;
-  const currentUser = computed(() =>
-    data.value.users.find((u) => u.id === sessionId.value && u.status === 'active'),
+  const currentUser = computed(
+    () =>
+      identity.value ||
+      data.value.users.find((u) => u.id === sessionId.value && u.status === 'active'),
   );
-  const unread = computed(() => data.value.notifications.filter((n) => !n.read).length);
+  const unread = computed(
+    () => unreadCount.value ?? data.value.notifications.filter((n) => !n.read).length,
+  );
+  function hydrate(
+    result: { users?: User[]; items?: any[] },
+    kind?: 'posts' | 'courses' | 'questions' | 'resources',
+  ) {
+    for (const u of result.users || []) {
+      const i = data.value.users.findIndex((x) => x.id === u.id);
+      if (i < 0) data.value.users.push(u);
+      else data.value.users[i] = u;
+    }
+    if (kind)
+      for (const item of result.items || []) {
+        const list = data.value[kind] as any[],
+          i = list.findIndex((x) => x.id === item.id);
+        if (i < 0) list.push(item);
+        else list[i] = item;
+      }
+  }
   const checkedToday = computed(() =>
     data.value.checkins.some((c) => c.userId === currentUser.value?.id && c.date === dayKey()),
   );
@@ -50,7 +73,10 @@ export const useCommunity = defineStore('community', () => {
     joined: new Date(0).toISOString(),
     status: 'active',
   };
-  const user = (id: string) => data.value.users.find((u) => u.id === id) || fallbackUser;
+  const user = (id: string) =>
+    (identity.value?.id === id ? identity.value : undefined) ||
+    data.value.users.find((u) => u.id === id) ||
+    fallbackUser;
   const category = (id: string) => data.value.categories.find((c) => c.id === id);
   function notify(text: string, type = 'success') {
     toast.value = { text, type };
@@ -76,11 +102,17 @@ export const useCommunity = defineStore('community', () => {
     loading.value = true;
     loadError.value = '';
     try {
-      const result = await api<{ state: AppData; user: { id: string } | null; csrfToken: string }>(
-        '/bootstrap',
-      );
+      const result = await api<{
+        state: AppData;
+        user: User | null;
+        csrfToken: string;
+        unreadCount?: number;
+      }>('/bootstrap');
       data.value = result.state;
       sessionId.value = result.user?.id || '';
+      identity.value = result.user?.name ? result.user : null;
+      if (identity.value) hydrate({ users: [identity.value] });
+      unreadCount.value = result.unreadCount ?? null;
       setCsrfToken(result.csrfToken);
       ready.value = true;
     } catch (e) {
@@ -106,12 +138,18 @@ export const useCommunity = defineStore('community', () => {
     pending.value++;
     try {
       const value = await api<T>(path, { method, body });
-      await refresh();
+      try {
+        await refresh();
+      } catch {
+        notify('操作已保存，页面数据刷新失败，请刷新页面查看', 'error');
+        return value;
+      }
       if (message) notify(message);
       return value;
     } catch (e) {
       if (e instanceof ApiError && e.status === 401) {
         sessionId.value = '';
+        identity.value = null;
         setCsrfToken('');
         modal.value = { type: 'login' };
       }
@@ -157,7 +195,7 @@ export const useCommunity = defineStore('community', () => {
       id ? `/posts/${id}` : '/posts',
       id ? 'PATCH' : 'POST',
       input,
-      id ? '帖子已更新' : '帖子发布成功',
+      currentUser.value?.role === 'admin' ? '帖子已保存' : '已提交审核，通过后公开展示',
     );
     return value.id;
   }
@@ -219,7 +257,7 @@ export const useCommunity = defineStore('community', () => {
     if (result) notify('签到已保存到云数据库');
   }
   async function saveQuestion(
-    input: Pick<Question, 'title' | 'content' | 'category' | 'tags'>,
+    input: Pick<Question, 'title' | 'content' | 'category' | 'tags'> & { bounty?: number },
     id?: string,
   ) {
     if (!requireUser()) return;
@@ -282,6 +320,7 @@ export const useCommunity = defineStore('community', () => {
     mutate(`/ai/drafts/${id}`, 'DELETE', undefined, '草稿已删除');
   return {
     data,
+    hydrate,
     sessionId,
     theme,
     ready,

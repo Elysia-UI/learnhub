@@ -10,8 +10,12 @@ if (!process.env.DB_HOST && !existsSync('.local/database.dpapi')) {
 }
 const { seed } = await import('../server/seed.mjs');
 const { pool } = await import('../server/db.mjs');
+const { query, transaction } = await import('../server/db.mjs');
+const { syncBadges } = await import('../server/services/activity.mjs');
 try {
   await seed();
+  for (const user of await query('SELECT id FROM users'))
+    await transaction((c) => syncBadges(c, user.id));
 } finally {
   await pool.end();
 }

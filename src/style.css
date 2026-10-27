@@ -4050,6 +4050,59 @@ strong {
   overflow: auto;
   padding: 0 32px;
 }
+.ai-message-list {
+  flex: 1;
+  min-height: 180px;
+  overflow: auto;
+  padding: 24px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+.ai-message {
+  padding: 18px 20px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--card);
+  max-width: 95%;
+  overflow-wrap: anywhere;
+}
+.ai-message.user {
+  align-self: flex-end;
+  background: var(--bg);
+}
+.ai-message.assistant {
+  align-self: flex-start;
+  width: 100%;
+}
+.ai-message > strong {
+  display: block;
+  margin-bottom: 10px;
+  color: var(--text);
+}
+.ai-message .markdown-content {
+  font-size: 14px;
+  line-height: 1.9;
+}
+.ai-message .markdown-content pre {
+  max-width: 100%;
+  overflow: auto;
+}
+.ai-history .pagination {
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 12px 0;
+}
+.ai-composer > div {
+  flex-wrap: wrap;
+  gap: 8px;
+}
+@media (max-width: 700px) {
+  .ai-message {
+    max-width: 100%;
+    padding: 14px;
+  }
+}
 .ai-topline {
   display: flex;
   align-items: center;

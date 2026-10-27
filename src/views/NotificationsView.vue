@@ -1,15 +1,29 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { useCommunity } from '../stores/community';
 import { timeAgo } from '../services/format';
+import Pagination from '../components/Pagination.vue';
+import { usePaged } from '../services/paged';
 import Icon from '../components/Icon.vue';
 import EmptyState from '../components/EmptyState.vue';
 const store = useCommunity(),
   filter = ref('全部消息');
-const notifications = computed(() =>
-  store.data.notifications.filter(
-    (n) => n.userId === store.currentUser?.id && (filter.value !== '未读消息' || !n.read),
-  ),
+const {
+  items: notifications,
+  total,
+  page,
+  loading,
+  error,
+  load,
+} = usePaged<import('../data/types').Notification>(
+  () => (store.currentUser ? '/notifications?unread=' + String(filter.value === '未读消息') : ''),
+  [filter, () => store.currentUser?.id],
+);
+watch(
+  () => store.pending,
+  (n, old) => {
+    if (old > 0 && n === 0) void load();
+  },
 );
 function remove(id: string) {
   void store.deleteNotification(id);
@@ -74,6 +88,9 @@ function remove(id: string) {
           </button>
         </div>
       </div>
+      <p v-if="loading" class="small-empty">正在加载…</p>
+      <p v-if="error" class="form-error">{{ error }} <button @click="load">重试</button></p>
+      <Pagination v-model="page" :total="total" />
       <EmptyState
         v-if="!notifications.length"
         title="所有好消息，都会如期而至"

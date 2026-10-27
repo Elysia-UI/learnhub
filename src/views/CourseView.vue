@@ -1,12 +1,15 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import { useCommunity } from '../stores/community';
+import { api } from '../services/api';
 import Icon from '../components/Icon.vue';
 import Avatar from '../components/Avatar.vue';
 import CourseCover from '../components/CourseCover.vue';
 import Markdown from '../components/Markdown.vue';
 import EmptyState from '../components/EmptyState.vue';
+import Pagination from '../components/Pagination.vue';
+import { usePaged } from '../services/paged';
 const store = useCommunity(),
   route = useRoute(),
   activeTab = ref('outline'),
@@ -24,6 +27,43 @@ const chapter = computed(
     course.value?.chapters.find((c) => c.id === enrollment.value?.lastChapter) ||
     course.value?.chapters[0],
 );
+const reviewScore = ref(5),
+  reviewText = ref(''),
+  reviewBusy = ref(false),
+  reviewError = ref('');
+const {
+  items: reviews,
+  total: reviewTotal,
+  page: reviewPage,
+  load: loadReviews,
+  error: reviewLoadError,
+} = usePaged<any>(() => '/courses/' + route.params.id + '/reviews', [() => route.params.id]);
+async function saveReview() {
+  if (!store.requireUser()) return;
+  reviewBusy.value = true;
+  reviewError.value = '';
+  try {
+    await api('/courses/' + route.params.id + '/review', {
+      method: 'PUT',
+      body: { rating: reviewScore.value, content: reviewText.value.trim() },
+    });
+    await Promise.all([loadReviews(), loadDetail()]);
+    reviewText.value = '';
+    store.notify('课程评价已保存');
+  } catch (e) {
+    reviewError.value = (e as Error).message;
+  } finally {
+    reviewBusy.value = false;
+  }
+}
+async function deleteReview(id: string) {
+  try {
+    await api('/courses/' + route.params.id + '/review/' + id, { method: 'DELETE' });
+    await Promise.all([loadReviews(), loadDetail()]);
+  } catch (e) {
+    reviewError.value = (e as Error).message;
+  }
+}
 async function learn(chapterId?: string) {
   if (!course.value || !store.requireUser()) return;
   if (!enrollment.value) await store.enroll(course.value);
@@ -31,8 +71,37 @@ async function learn(chapterId?: string) {
   activeTab.value = 'learn';
   if (enrollment.value) await store.learnChapter(course.value.id, selected.value);
 }
+const detailError = ref(''),
+  detailLoading = ref(false);
+async function loadDetail() {
+  detailLoading.value = true;
+  detailError.value = '';
+  try {
+    const r = await api<{ item: any; users: any[] }>('/courses/' + route.params.id);
+    store.hydrate({ items: [r.item], users: r.users }, 'courses');
+  } catch (e) {
+    detailError.value = (e as Error).message;
+  } finally {
+    detailLoading.value = false;
+  }
+}
+watch(
+  () => route.params.id,
+  () => void loadDetail(),
+  { immediate: true },
+);
+watch(
+  () => store.pending,
+  (n, old) => {
+    if (old > 0 && n === 0) void loadDetail();
+  },
+);
 </script>
 <template>
+  <p v-if="detailLoading" class="small-empty">正在加载…</p>
+  <p v-if="detailError" class="form-error">
+    {{ detailError }} <button class="text-link" @click="loadDetail">重试</button>
+  </p>
   <div v-if="course" class="full-page">
     <RouterLink to="/courses" class="back-link"
       ><Icon name="ArrowLeft" :size="17" />返回课程中心</RouterLink
@@ -139,6 +208,56 @@ async function learn(chapterId?: string) {
             </button>
           </div>
         </div>
+        <section class="course-about">
+          <h2>
+            学习者评价
+            <small
+              >{{ course.rating ? course.rating.toFixed(1) + ' 分' : '暂无评分' }} ·
+              {{ reviewTotal }} 条评价</small
+            >
+          </h2>
+          <form
+            v-if="enrollment && course.teacherId !== store.currentUser?.id"
+            @submit.prevent="saveReview"
+          >
+            <label class="field"
+              >评分<select v-model.number="reviewScore">
+                <option v-for="n in 5" :key="n" :value="n">{{ n }} 星</option>
+              </select></label
+            >
+            <label class="field"
+              >学习感受<textarea
+                v-model="reviewText"
+                minlength="5"
+                maxlength="2000"
+                required
+                placeholder="分享课程收获，每人一条，可更新。"
+              ></textarea>
+            </label>
+            <button class="btn btn-primary btn-sm" :disabled="reviewBusy">
+              {{ reviewBusy ? '正在保存…' : '提交 / 更新评价' }}
+            </button>
+          </form>
+          <p v-else class="muted">加入课程后可以分享学习感受。</p>
+          <p v-if="reviewError || reviewLoadError" class="form-error">
+            {{ reviewError || reviewLoadError }}
+          </p>
+          <article v-for="r in reviews" :key="r.id" class="profile-record">
+            <Avatar :user="{ name: r.name, avatar: r.avatar } as any" :size="36" />
+            <div>
+              <strong>{{ r.name }} · {{ r.rating }} 星</strong>
+              <p>{{ r.content }}</p>
+            </div>
+            <button
+              v-if="r.userId === store.currentUser?.id || store.currentUser?.role === 'admin'"
+              class="text-danger"
+              @click="deleteReview(r.id)"
+            >
+              删除
+            </button>
+          </article>
+          <Pagination v-model="reviewPage" :total="reviewTotal" />
+        </section>
       </section>
       <aside class="detail-aside">
         <section class="panel progress-card">
