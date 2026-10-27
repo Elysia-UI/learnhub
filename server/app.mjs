@@ -90,25 +90,20 @@ app.use(
   resourceRoutes,
 );
 app.use('/api/admin', adminRoutes);
-app.get('/api/bootstrap', async (req, res) =>
+app.get('/api/bootstrap', async (req, res) => {
+  const metadata = {},
+    state = await snapshot(req.user, metadata);
+  res.set('Cache-Control', 'private, no-store');
   res.json({
     data: {
-      state: await snapshot(req.user),
+      state,
       user: req.user ? { ...publicUser(req.user), email: req.user.email } : null,
       csrfToken: req.user?.csrf_token || '',
-      unreadCount: req.user
-        ? Number(
-            (
-              await query('SELECT COUNT(*) AS n FROM notifications WHERE user_id=? AND is_read=0', [
-                req.user.id,
-              ])
-            )[0].n,
-          )
-        : 0,
+      unreadCount: metadata.unreadCount,
       aiConfigured: aiSettings().configured,
     },
-  }),
-);
+  });
+});
 app.get('/api/stats', async (_req, res) => res.json({ data: await stats() }));
 app.use('/api', (_req, _res, next) => next(new HttpError(404, '接口不存在', 'NOT_FOUND')));
 if (config.production) {

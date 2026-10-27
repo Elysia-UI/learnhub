@@ -1,0 +1,199 @@
+{
+  "date": "2026-10-28",
+  "queryCounts": {
+    "before": 27,
+    "after": 1
+  },
+  "samePoolAlternating": [
+    {
+      "kind": "before",
+      "ms": 1175,
+      "bytes": 275131,
+      "posts": 114,
+      "comments": 366
+    },
+    {
+      "kind": "after",
+      "ms": 725,
+      "bytes": 275131,
+      "databaseBytes": 84597,
+      "posts": 114,
+      "comments": 366
+    },
+    {
+      "kind": "before",
+      "ms": 857,
+      "bytes": 275131,
+      "posts": 114,
+      "comments": 366
+    },
+    {
+      "kind": "after",
+      "ms": 488,
+      "bytes": 275131,
+      "databaseBytes": 84597,
+      "posts": 114,
+      "comments": 366
+    },
+    {
+      "kind": "before",
+      "ms": 636,
+      "bytes": 275131,
+      "posts": 114,
+      "comments": 366
+    },
+    {
+      "kind": "after",
+      "ms": 402,
+      "bytes": 275131,
+      "databaseBytes": 84597,
+      "posts": 114,
+      "comments": 366
+    }
+  ],
+  "parity": [
+    {
+      "role": "guest",
+      "parity": true,
+      "sections": 17,
+      "posts": 114,
+      "comments": 366,
+      "courses": 20,
+      "bytes": 260468,
+      "databaseBytes": 79663
+    },
+    {
+      "role": "student",
+      "parity": true,
+      "sections": 17,
+      "posts": 114,
+      "comments": 366,
+      "courses": 20,
+      "bytes": 263122,
+      "databaseBytes": 80433
+    },
+    {
+      "role": "teacher",
+      "parity": true,
+      "sections": 17,
+      "posts": 114,
+      "comments": 366,
+      "courses": 20,
+      "bytes": 263726,
+      "databaseBytes": 80486
+    },
+    {
+      "role": "admin",
+      "parity": true,
+      "sections": 17,
+      "posts": 114,
+      "comments": 366,
+      "courses": 20,
+      "bytes": 275131,
+      "databaseBytes": 84597
+    }
+  ],
+  "liveAnonymousBefore": {
+    "measuredAt": "2026-10-27T18:35:41.079Z",
+    "samples": [
+      {
+        "ms": 913,
+        "bytes": 260126,
+        "status": 200,
+        "posts": 114,
+        "courses": 20,
+        "questions": 30
+      },
+      {
+        "ms": 1148,
+        "bytes": 260126,
+        "status": 200,
+        "posts": 114,
+        "courses": 20,
+        "questions": 30
+      },
+      {
+        "ms": 446,
+        "bytes": 260126,
+        "status": 200,
+        "posts": 114,
+        "courses": 20,
+        "questions": 30
+      },
+      {
+        "ms": 764,
+        "bytes": 260126,
+        "status": 200,
+        "posts": 114,
+        "courses": 20,
+        "questions": 30
+      }
+    ]
+  },
+  "liveAnonymousAfter": {
+    "measuredAt": "2026-10-27T18:49:21.121Z",
+    "samples": [
+      {
+        "ms": 1438,
+        "status": 200,
+        "bytes": 260550,
+        "posts": 114,
+        "courses": 20,
+        "questions": 30,
+        "cacheControl": "private, no-store"
+      },
+      {
+        "ms": 577,
+        "status": 200,
+        "bytes": 260550,
+        "posts": 114,
+        "courses": 20,
+        "questions": 30,
+        "cacheControl": "private, no-store"
+      },
+      {
+        "ms": 457,
+        "status": 200,
+        "bytes": 260550,
+        "posts": 114,
+        "courses": 20,
+        "questions": 30,
+        "cacheControl": "private, no-store"
+      },
+      {
+        "ms": 601,
+        "status": 200,
+        "bytes": 260550,
+        "posts": 114,
+        "courses": 20,
+        "questions": 30,
+        "cacheControl": "private, no-store"
+      },
+      {
+        "ms": 649,
+        "status": 200,
+        "bytes": 260550,
+        "posts": 114,
+        "courses": 20,
+        "questions": 30,
+        "cacheControl": "private, no-store"
+      }
+    ]
+  },
+  "legacyPointZeroDates": 50,
+  "tests": {
+    "unit": {
+      "passed": 14,
+      "failed": 0
+    },
+    "api": {
+      "passed": 19,
+      "failed": 0,
+      "durationMs": 94257.2159
+    },
+    "build": {
+      "passed": true,
+      "viteSeconds": 6.16
+    }
+  }
+}

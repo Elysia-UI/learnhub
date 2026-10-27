@@ -24,6 +24,11 @@ export async function transaction(fn) {
     await new Promise((resolve) => setTimeout(resolve, 20 * (attempt + 1)));
   }
 }
-export const iso = (value) => (value ? new Date(value).toISOString() : undefined);
+export const iso = (value) => {
+  if (!value) return undefined;
+  const date = new Date(value);
+  // Legacy demo rows may contain MySQL zero dates. They must not break a refresh.
+  return Number.isFinite(date.getTime()) ? date.toISOString() : undefined;
+};
 export const json = (value, fallback = []) =>
   value == null ? fallback : typeof value === 'string' ? JSON.parse(value) : value;

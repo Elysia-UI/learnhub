@@ -5,7 +5,7 @@ import { createServer } from 'node:http';
 import { unlink, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { app } from '../app.mjs';
-import { pool, query } from '../db.mjs';
+import { pool, query, iso } from '../db.mjs';
 import { privateRead, storageDir } from '../config.mjs';
 import { seed } from '../seed.mjs';
 
@@ -100,6 +100,13 @@ after(async () => {
     await pool.end();
   }
 });
+test('历史无效日期不会中断页面数据读取', () => {
+  assert.equal(iso('0000-00-00 00:00:00.000'), undefined);
+  assert.equal(iso('0000-00-00T00:00:00.000000Z'), undefined);
+  assert.equal(iso(null), undefined);
+  assert.equal(iso('2026-10-28T00:00:00.000000Z'), '2026-10-28T00:00:00.000Z');
+});
+
 test('真实注册、密码散列、登录状态与公共隐私边界', async () => {
   const [u] = await query('SELECT password_hash,role FROM users WHERE id=?', [alice.id]);
   assert.ok(u.password_hash.startsWith('scrypt$'));
@@ -180,6 +187,37 @@ test('发帖与评论真正写入云数据库，独立客户端可重新读取',
   postId = result.body.data.id;
   assert.equal(result.body.data.status, 'pending');
   assert.equal((await client().call('/api/posts/' + postId)).status, 404);
+  const guestSnapshot = await client().call('/api/bootstrap');
+  const ownSnapshot = await alice.call('/api/bootstrap');
+  const otherSnapshot = await bob.call('/api/bootstrap');
+  const adminSnapshot = await admin.call('/api/bootstrap');
+  assert.equal(ownSnapshot.status, 200);
+  assert.equal(adminSnapshot.status, 200);
+  assert.ok(!guestSnapshot.body.data.state.posts.some((p) => p.id === postId));
+  assert.ok(!otherSnapshot.body.data.state.posts.some((p) => p.id === postId));
+  assert.equal(ownSnapshot.body.data.state.posts.find((p) => p.id === postId)?.status, 'pending');
+  assert.equal(adminSnapshot.body.data.state.posts.find((p) => p.id === postId)?.status, 'pending');
+  assert.equal(ownSnapshot.headers.get('cache-control'), 'private, no-store');
+  for (const key of [
+    'notifications',
+    'enrollments',
+    'checkins',
+    'points',
+    'history',
+    'conversations',
+  ]) {
+    assert.ok(
+      ownSnapshot.body.data.state[key].every((row) => row.userId === alice.id),
+      key,
+    );
+    assert.deepEqual(guestSnapshot.body.data.state[key], [], key);
+  }
+  assert.deepEqual(ownSnapshot.body.data.state.logs, []);
+  const [unread] = await query(
+    'SELECT COUNT(*) AS n FROM notifications WHERE user_id=? AND is_read=0',
+    [alice.id],
+  );
+  assert.equal(ownSnapshot.body.data.unreadCount, unread.n);
   assert.equal(
     (await bob.call('/api/admin/posts/' + postId + '/review', 'POST', { approved: true })).status,
     403,
@@ -197,6 +235,11 @@ test('发帖与评论真正写入云数据库，独立客户端可重新读取',
   assert.equal(fresh.status, 200);
   assert.equal(fresh.body.data.image, '/images/community/coding.jpg');
   assert.equal(fresh.body.data.comments[0].id, replyId);
+  const refreshed = await client().call('/api/bootstrap');
+  assert.equal(
+    refreshed.body.data.state.posts.find((p) => p.id === postId)?.comments[0]?.id,
+    replyId,
+  );
   const [stored] = await query('SELECT title FROM posts WHERE id=?', [postId]);
   assert.equal(stored.title, `真实数据库闭环 ${stamp}`);
   const [count] = await query('SELECT COUNT(*) AS n FROM post_comments WHERE post_id=?', [postId]);

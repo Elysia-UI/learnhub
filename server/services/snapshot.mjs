@@ -1,5 +1,6 @@
 import { query, iso, json } from '../db.mjs';
 import { publicUser } from '../security.mjs';
+import { readSnapshot } from './snapshot-read.mjs';
 const group = (rows, key) => {
   const map = new Map();
   for (const row of rows) {
@@ -10,15 +11,20 @@ const group = (rows, key) => {
   return map;
 };
 const marks = (ids) => ids.map(() => '?').join(',');
-export async function postsDTO(rows) {
+export async function postsDTO(rows, source) {
   if (!rows.length) return [];
   const ids = rows.map((r) => r.id),
     clause = marks(ids);
-  const [comments, likes, favorites] = await Promise.all([
-    query(`SELECT * FROM post_comments WHERE post_id IN (${clause}) ORDER BY created_at,id`, ids),
-    query(`SELECT * FROM post_likes WHERE post_id IN (${clause})`, ids),
-    query(`SELECT * FROM post_favorites WHERE post_id IN (${clause})`, ids),
-  ]);
+  const [comments, likes, favorites] = source
+    ? [source.postComments, source.postLikes, source.postFavorites]
+    : await Promise.all([
+        query(
+          `SELECT * FROM post_comments WHERE post_id IN (${clause}) ORDER BY created_at,id`,
+          ids,
+        ),
+        query(`SELECT * FROM post_likes WHERE post_id IN (${clause})`, ids),
+        query(`SELECT * FROM post_favorites WHERE post_id IN (${clause})`, ids),
+      ]);
   const cs = group(comments, 'post_id'),
     ls = group(likes, 'post_id'),
     fs = group(favorites, 'post_id');
@@ -48,20 +54,22 @@ export async function postsDTO(rows) {
     })),
   }));
 }
-export async function coursesDTO(rows) {
+export async function coursesDTO(rows, source) {
   if (!rows.length) return [];
   const ids = rows.map((r) => r.id),
     clause = marks(ids);
-  const [chapters, counts] = await Promise.all([
-    query(
-      `SELECT * FROM course_chapters WHERE course_id IN (${clause}) ORDER BY course_id,position`,
-      ids,
-    ),
-    query(
-      `SELECT course_id,COUNT(*) AS n FROM course_enrollments WHERE course_id IN (${clause}) GROUP BY course_id`,
-      ids,
-    ),
-  ]);
+  const [chapters, counts] = source
+    ? [source.chapters, source.courseCounts]
+    : await Promise.all([
+        query(
+          `SELECT * FROM course_chapters WHERE course_id IN (${clause}) ORDER BY course_id,position`,
+          ids,
+        ),
+        query(
+          `SELECT course_id,COUNT(*) AS n FROM course_enrollments WHERE course_id IN (${clause}) GROUP BY course_id`,
+          ids,
+        ),
+      ]);
   const ch = group(chapters, 'course_id'),
     ns = new Map(counts.map((r) => [r.course_id, r.n]));
   return rows.map((c) => ({
@@ -88,22 +96,24 @@ export async function coursesDTO(rows) {
     })),
   }));
 }
-export async function questionsDTO(rows) {
+export async function questionsDTO(rows, source) {
   if (!rows.length) return [];
   const ids = rows.map((r) => r.id),
     clause = marks(ids);
-  const [answers, comments, likes, favorites] = await Promise.all([
-    query(`SELECT * FROM answers WHERE question_id IN (${clause}) ORDER BY created_at`, ids),
-    query(
-      `SELECT c.* FROM answer_comments c JOIN answers a ON a.id=c.answer_id WHERE a.question_id IN (${clause}) ORDER BY c.created_at`,
-      ids,
-    ),
-    query(
-      `SELECT l.* FROM answer_likes l JOIN answers a ON a.id=l.answer_id WHERE a.question_id IN (${clause})`,
-      ids,
-    ),
-    query(`SELECT * FROM question_favorites WHERE question_id IN (${clause})`, ids),
-  ]);
+  const [answers, comments, likes, favorites] = source
+    ? [source.answers, source.answerComments, source.answerLikes, source.questionFavorites]
+    : await Promise.all([
+        query(`SELECT * FROM answers WHERE question_id IN (${clause}) ORDER BY created_at`, ids),
+        query(
+          `SELECT c.* FROM answer_comments c JOIN answers a ON a.id=c.answer_id WHERE a.question_id IN (${clause}) ORDER BY c.created_at`,
+          ids,
+        ),
+        query(
+          `SELECT l.* FROM answer_likes l JOIN answers a ON a.id=l.answer_id WHERE a.question_id IN (${clause})`,
+          ids,
+        ),
+        query(`SELECT * FROM question_favorites WHERE question_id IN (${clause})`, ids),
+      ]);
   const aa = group(answers, 'question_id'),
     cc = group(comments, 'answer_id'),
     ll = group(likes, 'answer_id'),
@@ -136,13 +146,15 @@ export async function questionsDTO(rows) {
     })),
   }));
 }
-export async function resourcesDTO(rows) {
+export async function resourcesDTO(rows, source) {
   if (!rows.length) return [];
   const favorites = group(
-    await query(
-      `SELECT * FROM resource_favorites WHERE resource_id IN (${marks(rows.map((r) => r.id))})`,
-      rows.map((r) => r.id),
-    ),
+    source
+      ? source.resourceFavorites
+      : await query(
+          `SELECT * FROM resource_favorites WHERE resource_id IN (${marks(rows.map((r) => r.id))})`,
+          rows.map((r) => r.id),
+        ),
     'resource_id',
   );
   return rows.map((r) => ({
@@ -171,16 +183,11 @@ export async function stats() {
   );
   return Object.fromEntries(Object.entries(row).map(([k, v]) => [k, Number(v)]));
 }
-export async function snapshot(user) {
-  const userId = user?.id || '',
-    admin = user?.role === 'admin';
-  const [
+export async function snapshot(user, metadata = {}) {
+  const source = await readSnapshot(user);
+  const {
     users,
     categories,
-    posts,
-    courses,
-    questions,
-    resources,
     notices,
     notifications,
     enrollments,
@@ -192,49 +199,15 @@ export async function snapshot(user) {
     rules,
     conversations,
     statistics,
-  ] = await Promise.all([
-    query(
-      'SELECT id,name,avatar,bio,role,points,status,created_at FROM users ORDER BY created_at LIMIT 500',
-    ),
-    query('SELECT * FROM categories ORDER BY id'),
-    query(
-      "SELECT * FROM posts WHERE status='published' OR author_id=? OR ?=1 ORDER BY pinned DESC,created_at DESC LIMIT 500",
-      [userId, Number(admin)],
-    ).then(postsDTO),
-    query('SELECT * FROM courses ORDER BY featured DESC,created_at DESC LIMIT 200').then(
-      coursesDTO,
-    ),
-    query('SELECT * FROM questions ORDER BY created_at DESC LIMIT 300').then(questionsDTO),
-    query(
-      "SELECT * FROM resources WHERE status='approved' OR author_id=? OR ?=1 ORDER BY created_at DESC LIMIT 500",
-      [userId, Number(admin)],
-    ).then(resourcesDTO),
-    query(
-      "SELECT * FROM announcements WHERE status='published' OR ?=1 ORDER BY pinned DESC,created_at DESC LIMIT 100",
-      [Number(admin)],
-    ),
-    query('SELECT * FROM notifications WHERE user_id=? ORDER BY created_at DESC LIMIT 300', [
-      userId,
-    ]),
-    query('SELECT * FROM course_enrollments WHERE user_id=?', [userId]),
-    query('SELECT * FROM learning_progress WHERE user_id=?', [userId]),
-    query(
-      "SELECT user_id,DATE_FORMAT(day,'%Y-%m-%d') AS day FROM checkins WHERE user_id=? ORDER BY day DESC LIMIT 366",
-      [userId],
-    ),
-    query('SELECT * FROM point_records WHERE user_id=? ORDER BY created_at DESC LIMIT 300', [
-      userId,
-    ]),
-    query('SELECT * FROM browsing_history WHERE user_id=? ORDER BY visited_at DESC LIMIT 100', [
-      userId,
-    ]),
-    admin ? query('SELECT * FROM admin_operation_logs ORDER BY created_at DESC LIMIT 200') : [],
-    query('SELECT * FROM point_rules'),
-    query('SELECT * FROM ai_conversations WHERE user_id=? ORDER BY created_at DESC LIMIT 100', [
-      userId,
-    ]),
-    stats(),
+  } = source;
+  const [posts, courses, questions, resources] = await Promise.all([
+    postsDTO(source.posts, source),
+    coursesDTO(source.courses, source),
+    questionsDTO(source.questions, source),
+    resourcesDTO(source.resources, source),
   ]);
+  metadata.unreadCount = Number(source.unreadCount);
+  metadata.databaseBytes = source.databaseBytes;
   return {
     version: 2,
     users: users.map(publicUser),
