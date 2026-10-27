@@ -227,7 +227,11 @@ onUnmounted(() => controller?.abort());
         <div v-for="c in conversations" :key="c.id" :class="{ active: activeId === c.id }">
           <button @click="select(c.id)">
             <Icon name="MessageSquare" :size="16" /><span>{{ c.title }}</span></button
-          ><button class="icon-btn" aria-label="删除草稿" @click="remove(c.id)">
+          ><button
+            class="icon-btn"
+            :aria-label="mode === 'chat' ? '删除对话' : '删除草稿'"
+            @click="remove(c.id)"
+          >
             <Icon name="Trash2" :size="14" />
           </button>
         </div>
@@ -244,7 +248,8 @@ onUnmounted(() => controller?.abort());
       <div class="ai-topline">
         <span><Icon name="Sparkles" :size="17" />你的专属学习伙伴</span
         ><button class="text-link" @click="showGuide = !showGuide">
-          <span class="status-dot orange"></span>{{ configured ? '模型服务已配置' : '需要配置模型'
+          <span class="status-dot" :class="{ orange: !configured }"></span
+          >{{ configured ? '模型服务已配置' : '需要配置模型'
           }}<Icon name="ChevronDown" :size="15" />
         </button>
       </div>
@@ -255,7 +260,7 @@ onUnmounted(() => controller?.abort());
           <p>
             {{ configMessage }}
           </p>
-          <p>未配置时仍可以编辑并保存学习草稿。</p>
+          <p v-if="!configured">未配置时仍可以编辑并保存学习草稿。</p>
         </div>
         <button class="icon-btn" aria-label="关闭配置提示" @click="showGuide = false">
           <Icon name="X" :size="17" />
@@ -294,13 +299,16 @@ onUnmounted(() => controller?.abort());
           <textarea
             v-model="text"
             maxlength="12000"
-            aria-label="学习问题草稿"
+            :aria-label="mode === 'chat' ? '学习问题' : '学习问题草稿'"
             placeholder="写下你的学习问题，Ctrl + Enter 发送…"
             rows="3"
             @keydown.ctrl.enter.prevent="send()"
           ></textarea>
           <div>
-            <span><Icon name="LockKeyhole" :size="14" />云端学习草稿</span
+            <span
+              ><Icon name="LockKeyhole" :size="14" />{{
+                mode === 'chat' ? '云端对话记录' : '云端学习草稿'
+              }}</span
             ><button
               class="btn btn-secondary btn-sm"
               :disabled="busy || !text.trim()"
