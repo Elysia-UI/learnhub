@@ -2,6 +2,7 @@
 import { computed, ref } from 'vue';
 import { useCommunity } from '../stores/community';
 import Icon from '../components/Icon.vue';
+import HeroCarousel from '../components/HeroCarousel.vue';
 import SectionHead from '../components/SectionHead.vue';
 import CourseCard from '../components/CourseCard.vue';
 import PostRow from '../components/PostRow.vue';
@@ -38,32 +39,7 @@ const resources = computed(() =>
 <template>
   <div class="page-grid">
     <div class="main-column">
-      <section class="hero-banner">
-        <img class="hero-art" src="/images/hero.png" alt="阳光下的校园与正在阅读的同学" />
-        <div class="hero-gradient"></div>
-        <div class="hero-content">
-          <span class="hero-eyebrow">更好的学习，遇见更大的世界</span>
-          <h1>欢迎来到 LearnHub</h1>
-          <p>一个专注于学习、交流与分享的知识社区</p>
-          <div class="hero-features">
-            <span><Icon name="BookOpen" :size="15" />优质课程</span
-            ><span><Icon name="MessagesSquare" :size="15" />活跃社区</span
-            ><span><Icon name="FolderOpen" :size="15" />丰富资源</span
-            ><span><Icon name="Users" :size="15" />成长伙伴</span>
-          </div>
-          <div class="hero-buttons">
-            <RouterLink to="/courses" class="btn hero-primary"
-              >开始探索<Icon name="ChevronRight" :size="18" /></RouterLink
-            ><button class="btn hero-secondary" @click="store.modal = { type: 'about' }">
-              <Icon name="Play" :size="18" />认识知学社区
-            </button>
-          </div>
-        </div>
-        <div class="hero-handwriting">
-          学习，<br /><span>让更好的自己</span><br /><span class="last">在高处相遇 ♡</span>
-        </div>
-        <div class="hero-pagination"><i class="active"></i><i></i><i></i></div>
-      </section>
+      <HeroCarousel />
       <section class="panel home-courses">
         <SectionHead title="推荐课程" icon="BookOpen" to="/courses" />
         <div class="course-grid home-course-grid">
