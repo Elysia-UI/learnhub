@@ -3,6 +3,32 @@ import { spawnSync } from 'node:child_process';
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { isIP } from 'node:net';
+
+// Trust only the local reverse proxy by default. Never accept Express's broad
+// boolean/number shortcuts from environment configuration.
+export function parseTrustProxy(value) {
+  const configured = (value || 'loopback').trim();
+  if (['off', 'false'].includes(configured)) return false;
+  const entries = configured.split(',').map((entry) => entry.trim());
+  for (const entry of entries) {
+    if (entry === 'loopback') continue;
+    const parts = entry.split('/');
+    const version = isIP(parts[0]);
+    if (!version || parts.length > 2)
+      throw new Error('TRUST_PROXY 仅允许 loopback、off 或明确的 IP/CIDR');
+    if (parts.length === 2) {
+      const prefix = parts[1];
+      if (
+        !/^\d+$/.test(prefix) ||
+        Number(prefix) < 1 ||
+        Number(prefix) > (version === 4 ? 32 : 128)
+      )
+        throw new Error('TRUST_PROXY 禁止全部网络及无效 CIDR');
+    }
+  }
+  return entries.length === 1 ? entries[0] : entries;
+}
 
 export const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 export const privateDir = path.join(root, '.local');
@@ -75,6 +101,7 @@ if (
     '正式部署连接远程数据库必须配置 DB_SSL=true 和可信 CA，禁止使用明文公网数据库连接',
   );
 export const config = {
+  trustProxy: parseTrustProxy(process.env.TRUST_PROXY),
   db: {
     ...db,
     charset: 'utf8mb4',
@@ -88,6 +115,7 @@ export const config = {
       ? {
           ssl: {
             rejectUnauthorized: true,
+            minVersion: 'TLSv1.2',
             ...(process.env.DB_SSL_CA ? { ca: readFileSync(process.env.DB_SSL_CA) } : {}),
           },
         }

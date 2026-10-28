@@ -1,0 +1,54 @@
+[Unit]
+Description=LearnHub Community
+ConditionPathExists=/etc/learnhub/mysql-ca.pem
+After=network-online.target
+Wants=network-online.target
+StartLimitIntervalSec=300
+StartLimitBurst=5
+
+[Service]
+Type=simple
+User=learnhub
+Group=learnhub
+WorkingDirectory=/srv/learnhub/current
+EnvironmentFile=/etc/learnhub/learnhub.env
+Environment=UV_THREADPOOL_SIZE=2
+Environment=MALLOC_ARENA_MAX=2
+# Force the production guard and the local-only listener, even if the env file
+# accidentally contains development values. Use a project-owned Node 24+.
+ExecStart=/usr/bin/env NODE_ENV=production API_HOST=127.0.0.1 API_PORT=3002 /opt/learnhub/node/bin/node --max-old-space-size=192 server/index.mjs
+Restart=on-failure
+RestartSec=15
+KillSignal=SIGTERM
+TimeoutStopSec=30
+
+# Initial limits for the 2 CPU / 1.68 GiB host shared with the QQ robot.
+# CPUQuota=100% permits at most one CPU. Reassess from measured use, not guesses.
+CPUQuota=100%
+CPUShares=256
+Nice=10
+MemoryHigh=320M
+MemoryMax=384M
+OOMScoreAdjust=300
+TasksMax=64
+LimitNOFILE=4096
+
+UMask=0027
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+RestrictRealtime=true
+LockPersonality=true
+ReadWritePaths=/srv/learnhub-data
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=learnhub
+
+[Install]
+WantedBy=multi-user.target

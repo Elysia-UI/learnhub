@@ -1,0 +1,40 @@
+[Unit]
+Description=LearnHub HTTPS reverse proxy
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=learnhub-proxy
+Group=learnhub-proxy
+Environment=HOME=/var/lib/learnhub-proxy
+Environment=XDG_DATA_HOME=/var/lib/learnhub-proxy
+Environment=XDG_CONFIG_HOME=/var/lib/learnhub-proxy
+Environment=GOMEMLIMIT=64MiB
+Environment=GOMAXPROCS=2
+ExecStart=/opt/learnhub/bin/caddy run --config /etc/learnhub/Caddyfile --adapter caddyfile
+ExecReload=/opt/learnhub/bin/caddy reload --config /etc/learnhub/Caddyfile --adapter caddyfile --address unix//var/lib/learnhub-proxy/admin.sock --force
+Restart=on-failure
+RestartSec=10
+TimeoutStopSec=20
+CPUQuota=50%
+CPUShares=256
+Nice=10
+MemoryMax=128M
+TasksMax=64
+LimitNOFILE=4096
+UMask=0027
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+CapabilityBoundingSet=CAP_NET_BIND_SERVICE
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+ReadWritePaths=/var/lib/learnhub-proxy
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,17 @@
+[Unit]
+Description=Renew LearnHub short-lived IP HTTPS certificate
+After=network-online.target learnhub-proxy.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+UMask=0022
+Environment=GOMAXPROCS=1
+Environment=GOMEMLIMIT=64MiB
+ExecStart=/opt/learnhub/bin/lego run --accept-tos --domains __PUBLIC_HOST__ --server letsencrypt --profile shortlived --http --http.webroot /var/lib/learnhub-acme/webroot --path /var/lib/learnhub-acme --no-random-sleep --deploy-hook /usr/local/sbin/learnhub-cert-reload
+CPUQuota=50%
+Nice=15
+MemoryMax=160M
+TimeoutStartSec=240

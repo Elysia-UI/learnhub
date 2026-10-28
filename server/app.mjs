@@ -22,6 +22,7 @@ import { chatRoutes } from './routes/chat.mjs';
 import { mountProductionStatic } from './static.mjs';
 export const app = express();
 app.disable('x-powered-by');
+app.set('trust proxy', config.trustProxy);
 app.use((req, res, next) => {
   req.requestId = randomUUID();
   res.set('X-Request-Id', req.requestId);

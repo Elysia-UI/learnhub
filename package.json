@@ -20,6 +20,8 @@
     "test:assets": "node --test server/tests/static-assets.test.mjs server/tests/avatar-images.test.mjs",
     "db:init": "node scripts/init-db.mjs",
     "db:migrate": "node server/migrate.mjs",
+    "db:backup": "node scripts/backup-db.mjs",
+    "test:proxy": "node --test server/tests/proxy-config.test.mjs",
     "serve:api": "node server/index.mjs",
     "db:verify": "node scripts/verify-db.mjs",
     "db:enrich": "node server/enrich-demo.mjs",

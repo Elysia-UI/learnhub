@@ -40,7 +40,7 @@ STORAGE_DIR=/srv/learnhub-data/files
 NODE_ENV=production
 ```
 
-替换示例域名主机路径。TLS 保持证书验证，不通过关闭校验绕过错误。本次实测原云连接尚未启用 TLS，未声称完成正式加密部署。
+替换示例域名主机路径。TLS 保持证书验证，不通过关闭校验绕过错误。2026-10-28 已开启原云数据库 SSL，实际生产连接为 TLS 1.3，服务端证书身份限制见[部署记录](server-deployment-2026-10-28.md)。
 
 ## 正式服务
 
@@ -143,7 +143,7 @@ server {
 | 生产登录丢失   | 使用 HTTPS，检查 Secure Cookie 与 Origin        |
 | 文件不可用     | 恢复与数据库匹配的私有文件目录                  |
 
-当前是本机前后端 + 真实云 MySQL，尚未发布应用至公网，也未完成生产 TLS、负载测试及备份恢复演练。
+2026-10-28 已实际发布到 [公网 HTTPS 网站](https://192.0.2.10/)，使用独立 Caddy 反代、生产 Node 服务和原云 MySQL。已生成备份；完整负载测试及独立恢复演练尚未完成，见[部署记录](server-deployment-2026-10-28.md)。
 
 ## 本轮升级和 AI 配置
 
@@ -153,4 +153,4 @@ server {
 
 AI_BASE_URL、AI_API_KEY、AI_MODEL 在服务端 `.env` 配置后重启，使用兼容 `/chat/completions` 的 SSE 服务，详见 [功能补齐记录](feature-implementation.md)。2026-10-28 当前本机已完成阶跃星辰 Step Plan / step-5-preview 的两轮真实联调；迁移到其他环境仍须单独供应密钥，详见 [接入记录](ai-stepfun-verification.md)。
 
-生产启动会拒绝未启用 TLS 的远程数据库连接。当前云端握手返回 HANDSHAKE_NO_SSL_SUPPORT，需先配置云数据库 TLS 和可信 CA；不得通过关闭证书校验绕过。
+生产启动会拒绝未启用 TLS 的远程数据库连接。原先 HANDSHAKE_NO_SSL_SUPPORT 的阻塞已通过腾讯云控制台开启 SSL 解决，使用腾讯云官方 CA 验证；不得通过关闭证书校验绕过。

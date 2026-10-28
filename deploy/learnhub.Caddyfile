@@ -1,0 +1,41 @@
+{
+	admin unix//var/lib/learnhub-proxy/admin.sock
+	auto_https off
+	persist_config off
+	default_sni __PUBLIC_HOST__
+	servers {
+		protocols h1 h2
+	}
+}
+
+http://__PUBLIC_HOST__ {
+	handle /.well-known/acme-challenge/* {
+		root * /var/lib/learnhub-acme/webroot
+		file_server
+	}
+	handle {
+		redir https://__PUBLIC_HOST__{uri} 308
+	}
+}
+
+https://__PUBLIC_HOST__ {
+	tls /etc/learnhub/tls/fullchain.pem /etc/learnhub/tls/privkey.pem
+	request_body {
+		max_size 12MB
+	}
+	@chat path /api/chat/events
+	handle @chat {
+		# Native event-stream flushing also propagates client disconnection upstream.
+		reverse_proxy 127.0.0.1:3002
+	}
+	@ai path /api/ai/*
+	handle @ai {
+		reverse_proxy 127.0.0.1:3002 {
+			flush_interval 100ms
+		}
+	}
+	handle {
+		encode gzip
+		reverse_proxy 127.0.0.1:3002
+	}
+}

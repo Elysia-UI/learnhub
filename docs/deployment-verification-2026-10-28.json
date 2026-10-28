@@ -1,0 +1,81 @@
+{
+  "date": "2026-10-28",
+  "base": "https://192.0.2.10",
+  "checks": [
+    {
+      "name": "数据库CA校验与加密连接",
+      "passed": true,
+      "tls": [
+        {
+          "Variable_name": "Ssl_cipher",
+          "Value": "TLS_AES_256_GCM_SHA384"
+        },
+        {
+          "Variable_name": "Ssl_version",
+          "Value": "TLSv1.3"
+        }
+      ]
+    },
+    {
+      "name": "公网HTTPS与数据库健康",
+      "passed": true
+    },
+    {
+      "name": "游客管理权限被拒绝",
+      "passed": true
+    },
+    {
+      "name": "真实注册与Secure HttpOnly会话",
+      "passed": true
+    },
+    {
+      "name": "登录退出与普通用户权限",
+      "passed": true
+    },
+    {
+      "name": "公网发帖审核评论与重新读取",
+      "passed": true
+    },
+    {
+      "name": "点赞与收藏",
+      "passed": true
+    },
+    {
+      "name": "互关好友私聊与已读",
+      "passed": true
+    },
+    {
+      "name": "SSE即时输出与连续六次断开释放",
+      "passed": true
+    },
+    {
+      "name": "公网资源上传审核与真实下载",
+      "passed": true
+    },
+    {
+      "name": "服务器真实阶跃星辰AI调用及增量返回",
+      "passed": true,
+      "answer": "OK"
+    },
+    {
+      "name": "生产JSON gzip传输压缩",
+      "passed": true
+    },
+    {
+      "name": "重启服务后帖子评论和私聊从数据库恢复",
+      "passed": true
+    },
+    {
+      "name": "私有目录与配置未公开",
+      "passed": true
+    }
+  ],
+  "failures": [],
+  "cleanup": true,
+  "resolvedIssues": [
+    {
+      "cleanupError": "Cannot delete or update a parent row: a foreign key constraint fails",
+      "resolution": "使用管理员资源删除接口清理了本轮临时资源及实际文件，再按精确虚拟账号清理；原测试误用了不存在的普通用户资源删除接口。"
+    }
+  ]
+}
