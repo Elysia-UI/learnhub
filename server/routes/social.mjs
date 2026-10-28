@@ -4,6 +4,7 @@ import { query, transaction } from '../db.mjs';
 import { assert, auth, idSchema, pageParams, publicUser, validate } from '../security.mjs';
 import { notify } from '../services/activity.mjs';
 import { activeMember, socialSummary } from '../services/social.mjs';
+import { publishChatChange } from '../services/chat-events.mjs';
 
 export const socialRoutes = Router();
 const followInput = z.object({ active: z.boolean() }).strict();
@@ -28,7 +29,9 @@ socialRoutes.put('/members/:id/follow', auth, async (req, res) => {
   const [resolved] = await query('SELECT id FROM users WHERE id=?', [requestedId]);
   assert(resolved, 404, '用户不存在或暂不可访问');
   assert(resolved.id !== req.user.id, 400, '不能关注自己');
+  let changed = false;
   const result = await transaction(async (conn) => {
+    changed = false;
     // Serialize changes for this pair, including opposite-direction requests,
     // in a deterministic lock order. Account status is rechecked under the lock.
     const members = new Map();
@@ -54,6 +57,7 @@ socialRoutes.put('/members/:id/follow', auth, async (req, res) => {
         conn,
       );
       if (added.affectedRows) {
+        changed = true;
         // This event survives unfollow and notification deletion so toggling a
         // relationship cannot repeatedly push notifications to the recipient.
         const first = await query(
@@ -82,14 +86,16 @@ socialRoutes.put('/members/:id/follow', auth, async (req, res) => {
         }
       }
     } else {
-      await query(
+      const removed = await query(
         'DELETE FROM user_follows WHERE follower_id=? AND followee_id=?',
         [followerId, followeeId],
         conn,
       );
+      changed = !!removed.affectedRows;
     }
     return socialSummary(followeeId, followerId, conn);
   });
+  if (changed) publishChatChange(req.user.id, resolved.id);
   respond(res, result);
 });
 

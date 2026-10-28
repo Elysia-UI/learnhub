@@ -64,6 +64,11 @@ const router = createRouter({
       meta: { title: '我的学习伙伴' },
     },
     {
+      path: '/messages/:peerId?',
+      component: () => import('./views/MessagesView.vue'),
+      meta: { title: '好友聊天' },
+    },
+    {
       path: '/members/:id/connections',
       component: () => import('./views/ConnectionsView.vue'),
       meta: { title: '学习伙伴' },

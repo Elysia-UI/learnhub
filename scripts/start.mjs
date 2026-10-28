@@ -3,6 +3,7 @@ import { spawn } from 'node:child_process';
 import { app } from '../server/app.mjs';
 import { config } from '../server/config.mjs';
 import { query, pool } from '../server/db.mjs';
+import { closeChatEvents } from '../server/services/chat-events.mjs';
 await query('SELECT 1');
 const apiServer = app.listen(config.port, config.host);
 await new Promise((resolve, reject) => {
@@ -29,6 +30,7 @@ if (process.platform === 'win32' && !process.argv.includes('--no-open')) {
 }
 for (const signal of ['SIGINT', 'SIGTERM'])
   process.once(signal, async () => {
+    closeChatEvents();
     await frontend.close();
     apiServer.close(async () => {
       await pool.end();

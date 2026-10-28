@@ -8,6 +8,7 @@ import { app } from '../app.mjs';
 import { pool, query, iso } from '../db.mjs';
 import { privateRead, storageDir } from '../config.mjs';
 import { seed } from '../seed.mjs';
+import { closeChatEvents } from '../services/chat-events.mjs';
 
 let server,
   base,
@@ -65,6 +66,81 @@ async function register(who) {
   c.id = r.body.data.user.id;
   createdUsers.push(c.id);
   return c;
+}
+const dmPath = (peer, suffix = 'messages') => `/api/chat/threads/${peer.id}/${suffix}`;
+async function mutualChatFriends(a, b) {
+  const results = await Promise.all([
+    a.call(`/api/members/${b.id}/follow`, 'PUT', { active: true }),
+    b.call(`/api/members/${a.id}/follow`, 'PUT', { active: true }),
+  ]);
+  assert.ok(
+    results.every((r) => r.status === 200),
+    '建立本轮虚拟账号互关关系',
+  );
+}
+async function clearChatPair(a, b) {
+  await query(
+    'DELETE FROM dm_conversations WHERE (user_low_id=? AND user_high_id=?) OR (user_low_id=? AND user_high_id=?)',
+    [a.id, b.id, b.id, a.id],
+  );
+  await query(
+    'DELETE FROM user_follows WHERE (follower_id=? AND followee_id=?) OR (follower_id=? AND followee_id=?)',
+    [a.id, b.id, b.id, a.id],
+  );
+}
+async function openChatEvents(actor) {
+  const controller = new AbortController();
+  const response = await fetch(base + '/api/chat/events', {
+    signal: controller.signal,
+    headers: { cookie: actor.cookie, origin: 'http://127.0.0.1:5173' },
+  });
+  assert.equal(response.status, 200);
+  assert.match(response.headers.get('content-type'), /text\/event-stream/);
+  const reader = response.body.getReader(),
+    decoder = new TextDecoder();
+  let buffer = '';
+  return {
+    async next(name, timeout = 10000) {
+      let timer;
+      try {
+        return await Promise.race([
+          (async () => {
+            while (true) {
+              const boundary = buffer.indexOf('\n\n');
+              if (boundary >= 0) {
+                const frame = buffer.slice(0, boundary);
+                buffer = buffer.slice(boundary + 2);
+                const event = frame
+                  .split('\n')
+                  .find((line) => line.startsWith('event:'))
+                  ?.slice(6)
+                  .trim();
+                if (event !== name) continue;
+                const data = frame
+                  .split('\n')
+                  .filter((line) => line.startsWith('data:'))
+                  .map((line) => line.slice(5).trim())
+                  .join('\n');
+                return JSON.parse(data);
+              }
+              const chunk = await reader.read();
+              if (chunk.done) throw new Error('消息事件连接提前结束');
+              buffer += decoder.decode(chunk.value, { stream: true }).replace(/\r\n/g, '\n');
+            }
+          })(),
+          new Promise((_, reject) => {
+            timer = setTimeout(() => reject(new Error('消息事件等待超时')), timeout);
+          }),
+        ]);
+      } finally {
+        clearTimeout(timer);
+      }
+    },
+    async close() {
+      controller.abort();
+      await reader.cancel().catch(() => {});
+    },
+  };
 }
 before(async () => {
   server = app.listen(0, '127.0.0.1');
@@ -483,6 +559,354 @@ test('停用用户无法被关注，旧关系不会计入关注、粉丝和好�
       stopped.id,
       stopped.id,
     ]);
+  }
+});
+
+test('好友私聊真实写入、角色边界与纯文本隐私保护', async () => {
+  const body = {
+    content: `私聊专属正文 ${stamp} <script>alert('xss')</script>`,
+    clientId: `dm-private-${stamp}`,
+  };
+  try {
+    assert.equal((await client().call('/api/chat/unread')).status, 401);
+    assert.equal((await client().call('/api/chat/threads')).status, 401);
+    assert.equal((await client().call('/api/chat/events')).status, 401);
+    assert.equal((await client().call(dmPath(bob), 'POST', body)).status, 401);
+    assert.equal((await alice.call(dmPath(alice), 'POST', body)).status, 400);
+    assert.equal(
+      (await alice.call(`/api/chat/threads/${alice.id.toUpperCase()}/messages`, 'POST', body))
+        .status,
+      400,
+    );
+    assert.equal(
+      (await alice.call('/api/chat/threads/missing-chat-' + stamp + '/messages')).status,
+      404,
+    );
+    assert.equal((await alice.call(dmPath(bob))).status, 403);
+    assert.equal((await alice.call(dmPath(bob), 'POST', body)).status, 403);
+    await mutualChatFriends(alice, bob);
+    const empty = await alice.call(dmPath(bob));
+    assert.equal(empty.status, 200);
+    assert.deepEqual(empty.body.data.items, []);
+    assert.equal(empty.body.data.canSend, true);
+    const before = await query(
+      'SELECT id FROM dm_conversations WHERE (user_low_id=? AND user_high_id=?) OR (user_low_id=? AND user_high_id=?)',
+      [alice.id, bob.id, bob.id, alice.id],
+    );
+    assert.deepEqual(before, [], '打开新好友聊天不创建无消息的空会话');
+    assert.equal((await alice.call(dmPath(bob), 'POST', body, { 'X-CSRF-Token': '' })).status, 403);
+    for (const invalid of [
+      { ...body, content: '   ' },
+      { ...body, content: '字'.repeat(2001) },
+      { ...body, senderId: bob.id },
+      { ...body, clientId: '../invalid' },
+    ])
+      assert.equal((await alice.call(dmPath(bob), 'POST', invalid)).status, 400);
+    const sent = await alice.call(
+      `/api/chat/threads/${bob.id.toUpperCase()}/messages`,
+      'POST',
+      body,
+    );
+    assert.ok([200, 201].includes(sent.status), JSON.stringify(sent.body));
+    const message = sent.body.data.message;
+    assert.match(message.id, /^[1-9]\d*$/);
+    assert.equal(message.senderId, alice.id);
+    assert.equal(message.recipientId, bob.id);
+    assert.equal(message.content, body.content, '消息以纯文本保存');
+    assert.equal(message.readAt, null);
+    assert.ok(Number.isFinite(Date.parse(message.createdAt)));
+    const independent = client();
+    independent.cookie = bob.cookie;
+    const restored = await independent.call(dmPath(alice));
+    assert.equal(restored.status, 200);
+    assert.equal(restored.body.data.items[0].id, message.id);
+    assert.equal(restored.body.data.items[0].content, body.content);
+    assert.equal(restored.headers.get('cache-control'), 'private, no-store');
+    assert.ok(!('email' in restored.body.data.peer));
+    assert.ok(!('password_hash' in restored.body.data.peer));
+    assert.equal((await admin.call(dmPath(bob))).status, 403, '管理员也不能读取其他双方的私聊');
+    assert.equal(
+      (await admin.call(dmPath(bob, 'read'), 'PUT', { upToId: message.id })).status,
+      403,
+    );
+    assert.equal((await bob.call('/api/chat/unread')).body.data.count, 1);
+    assert.equal((await alice.call('/api/chat/unread')).body.data.count, 0);
+    const [stored] = await query(
+      'SELECT sender_id,recipient_id,content,client_id FROM dm_messages WHERE id=?',
+      [message.id],
+    );
+    assert.deepEqual(stored, {
+      sender_id: alice.id,
+      recipient_id: bob.id,
+      content: body.content,
+      client_id: body.clientId,
+    });
+    const publicSnapshot = await client().call('/api/bootstrap');
+    assert.ok(!JSON.stringify(publicSnapshot.body.data).includes(body.content));
+    const ownSnapshot = await alice.call('/api/bootstrap');
+    assert.ok(
+      !JSON.stringify(ownSnapshot.body.data.state).includes(body.content),
+      '私聊不进入社区快照',
+    );
+  } finally {
+    await clearChatPair(alice, bob);
+  }
+});
+
+test('好友私聊并发重试只保存一次，同请求标识不能替换正文或收件人', async () => {
+  const other = await register('DmOther');
+  try {
+    await mutualChatFriends(alice, bob);
+    await mutualChatFriends(alice, other);
+    const body = { content: '网络重试必须复用这一条真实消息。', clientId: `dm-once-${stamp}` };
+    const results = await Promise.all([1, 2, 3].map(() => alice.call(dmPath(bob), 'POST', body)));
+    assert.ok(
+      results.every((r) => [200, 201].includes(r.status)),
+      JSON.stringify(results),
+    );
+    const id = results[0].body.data.message.id;
+    assert.ok(results.every((r) => r.body.data.message.id === id));
+    const [count] = await query(
+      'SELECT COUNT(*) AS n FROM dm_messages WHERE sender_id=? AND client_id=?',
+      [alice.id, body.clientId],
+    );
+    assert.equal(count.n, 1);
+    assert.equal((await bob.call('/api/chat/unread')).body.data.count, 1);
+    assert.equal(
+      (await alice.call(dmPath(bob), 'POST', { ...body, content: '不能悄悄改成新的消息。' }))
+        .status,
+      409,
+    );
+    assert.equal((await alice.call(dmPath(other), 'POST', body)).status, 409);
+    const [stored] = await query('SELECT content,recipient_id FROM dm_messages WHERE id=?', [id]);
+    assert.equal(stored.content, body.content);
+    assert.equal(stored.recipient_id, bob.id);
+  } finally {
+    await clearChatPair(alice, bob);
+    await clearChatPair(alice, other);
+  }
+});
+
+test('私聊历史游标分页、增量消息、未读和已读游标按会话隔离', async () => {
+  const other = await register('DmRead');
+  try {
+    await mutualChatFriends(alice, bob);
+    await mutualChatFriends(other, bob);
+    const sent = [];
+    for (let i = 0; i < 5; i++) {
+      const r = await alice.call(dmPath(bob), 'POST', {
+        content: `历史分页消息 ${i}`,
+        clientId: `dm-page-${stamp}-${i}`,
+      });
+      assert.ok([200, 201].includes(r.status), JSON.stringify(r.body));
+      sent.push(r.body.data.message);
+    }
+    const elsewhere = await other.call(dmPath(bob), 'POST', {
+      content: '另一会话的未读消息不能被跨会话标记。',
+      clientId: `dm-other-read-${stamp}`,
+    });
+    assert.ok([200, 201].includes(elsewhere.status));
+    const recent = await bob.call(dmPath(alice) + '?limit=2');
+    assert.equal(recent.status, 200);
+    assert.deepEqual(
+      recent.body.data.items.map((m) => m.id),
+      sent.slice(3).map((m) => m.id),
+    );
+    assert.equal(recent.body.data.hasMore, true);
+    const older = await bob.call(dmPath(alice) + '?limit=2&before=' + sent[3].id);
+    assert.deepEqual(
+      older.body.data.items.map((m) => m.id),
+      sent.slice(1, 3).map((m) => m.id),
+    );
+    const first = await bob.call(dmPath(alice) + '?limit=2&before=' + sent[1].id);
+    assert.deepEqual(
+      first.body.data.items.map((m) => m.id),
+      [sent[0].id],
+    );
+    assert.equal(first.body.data.hasMore, false);
+    const after = await bob.call(dmPath(alice) + '?limit=2&after=' + sent[1].id);
+    assert.deepEqual(
+      after.body.data.items.map((m) => m.id),
+      sent.slice(2, 4).map((m) => m.id),
+    );
+    assert.equal(after.body.data.hasMore, true);
+    assert.deepEqual(
+      (await bob.call(dmPath(alice) + '?after=' + sent.at(-1).id)).body.data.items,
+      [],
+    );
+    for (const suffix of ['?before=bad', '?after=-1', '?before=1&after=1', '?limit=5000'])
+      assert.equal((await bob.call(dmPath(alice) + suffix)).status, 400);
+    assert.equal((await bob.call(dmPath(alice, 'read'), 'PUT', { upToId: 'invalid' })).status, 400);
+    assert.equal(
+      (await bob.call(dmPath(alice, 'read'), 'PUT', { upToId: elsewhere.body.data.message.id }))
+        .status,
+      400,
+      '其他会话的消息 ID 不能作为本会话已读游标',
+    );
+    assert.equal(
+      (await bob.call(dmPath(alice, 'read'), 'PUT', { upToId: sent[1].id })).status,
+      200,
+    );
+    assert.equal((await bob.call('/api/chat/unread')).body.data.count, 4);
+    const marked = await query(
+      'SELECT CAST(id AS CHAR) AS id,read_at FROM dm_messages WHERE sender_id=? AND recipient_id=? ORDER BY id',
+      [alice.id, bob.id],
+    );
+    assert.ok(marked.slice(0, 2).every((m) => m.read_at));
+    assert.ok(marked.slice(2).every((m) => m.read_at === null));
+    assert.equal(
+      (
+        await query('SELECT read_at FROM dm_messages WHERE id=?', [elsewhere.body.data.message.id])
+      )[0].read_at,
+      null,
+    );
+    const receipt = await alice.call(dmPath(bob) + '?after=' + sent.at(-1).id);
+    assert.equal(receipt.body.data.peerReadUpTo, sent[1].id);
+    await bob.call(dmPath(alice, 'read'), 'PUT', { upToId: sent.at(-1).id });
+    assert.equal((await bob.call('/api/chat/unread')).body.data.count, 1);
+    const list = await bob.call(
+      '/api/chat/threads?pageSize=1&q=' + encodeURIComponent('验收用户A'),
+    );
+    assert.equal(list.status, 200);
+    assert.equal(list.body.data.total, 1);
+    assert.equal(list.body.data.items[0].peer.id, alice.id);
+    assert.equal(list.body.data.items[0].lastMessage.id, sent.at(-1).id);
+    assert.equal(list.body.data.items[0].unreadCount, 0);
+    assert.equal(list.body.data.unreadCount, 1);
+    assert.ok(!('email' in list.body.data.items[0].peer));
+    assert.ok(!('password_hash' in list.body.data.items[0].peer));
+    const page2 = await bob.call('/api/chat/threads?pageSize=1&page=2');
+    assert.equal(page2.body.data.total, 2);
+    assert.equal(page2.body.data.items.length, 1);
+    const injection = await bob.call('/api/chat/threads?q=' + encodeURIComponent("' OR 1=1 --"));
+    assert.equal(injection.body.data.total, 0);
+  } finally {
+    await clearChatPair(alice, bob);
+    await clearChatPair(other, bob);
+  }
+});
+
+test('解除互关和停用后私聊历史保留只读，恢复互关后才可继续发送', async () => {
+  const stopped = await register('DmStopped');
+  try {
+    await mutualChatFriends(alice, bob);
+    const first = await alice.call(dmPath(bob), 'POST', {
+      content: '好友期间发送的消息应保留在历史中。',
+      clientId: `dm-history-${stamp}`,
+    });
+    assert.ok([200, 201].includes(first.status));
+    await alice.call(`/api/members/${bob.id}/follow`, 'PUT', { active: false });
+    const readonly = await alice.call(dmPath(bob));
+    assert.equal(readonly.status, 200);
+    assert.equal(readonly.body.data.canSend, false);
+    assert.equal(readonly.body.data.items[0].id, first.body.data.message.id);
+    assert.equal(
+      (
+        await alice.call(dmPath(bob), 'POST', {
+          content: '解除好友后应被拒绝发送。',
+          clientId: `dm-no-friend-${stamp}`,
+        })
+      ).status,
+      403,
+    );
+    assert.equal(
+      (
+        await bob.call(dmPath(alice), 'POST', {
+          content: '反方向也不能继续发送。',
+          clientId: `dm-no-reverse-${stamp}`,
+        })
+      ).status,
+      403,
+    );
+    await mutualChatFriends(alice, bob);
+    const resumed = await alice.call(dmPath(bob), 'POST', {
+      content: '恢复互关后可以继续同一会话。',
+      clientId: `dm-resume-${stamp}`,
+    });
+    assert.ok([200, 201].includes(resumed.status));
+    assert.equal(
+      (await alice.call('/api/chat/threads')).body.data.items.filter((t) => t.peer.id === bob.id)
+        .length,
+      1,
+    );
+    await mutualChatFriends(alice, stopped);
+    const archived = await alice.call(dmPath(stopped), 'POST', {
+      content: '目标停用后仍可查看已有历史。',
+      clientId: `dm-before-ban-${stamp}`,
+    });
+    assert.ok([200, 201].includes(archived.status));
+    assert.equal(
+      (await admin.call(`/api/admin/users/${stopped.id}`, 'PATCH', { status: 'banned' })).status,
+      200,
+    );
+    const history = await alice.call(dmPath(stopped));
+    assert.equal(history.status, 200);
+    assert.equal(history.body.data.canSend, false);
+    assert.equal(history.body.data.items[0].content, '目标停用后仍可查看已有历史。');
+    assert.equal(
+      (
+        await alice.call(dmPath(stopped), 'POST', {
+          content: '停用账号不能接收新私聊。',
+          clientId: `dm-after-ban-${stamp}`,
+        })
+      ).status,
+      403,
+    );
+    assert.equal((await stopped.call(dmPath(alice))).status, 401);
+  } finally {
+    await clearChatPair(alice, bob);
+    await clearChatPair(alice, stopped);
+  }
+});
+
+test('私聊事件仅提示所属会话变化，支持独立连接与关闭清理', async () => {
+  const outsider = await register('DmEvents');
+  const streams = [];
+  try {
+    await mutualChatFriends(alice, bob);
+    const bobEvents = await openChatEvents(bob);
+    streams.push(bobEvents);
+    const aliceEvents = await openChatEvents(alice);
+    streams.push(aliceEvents);
+    const outsideEvents = await openChatEvents(outsider);
+    streams.push(outsideEvents);
+    assert.deepEqual(await bobEvents.next('ready'), {});
+    assert.deepEqual(await aliceEvents.next('ready'), {});
+    assert.deepEqual(await outsideEvents.next('ready'), {});
+    const sent = await alice.call(dmPath(bob), 'POST', {
+      content: `事件测试私密内容 ${stamp}`,
+      clientId: `dm-events-${stamp}`,
+    });
+    assert.ok([200, 201].includes(sent.status), JSON.stringify(sent.body));
+    assert.deepEqual(
+      await bobEvents.next('change'),
+      {},
+      '事件本身不携带消息正文、用户ID或私密计数',
+    );
+    assert.deepEqual(await aliceEvents.next('change'), {});
+    // Start the negative observation only after the real send has committed.
+    // A wrongly broadcast event would already be buffered on this connection.
+    const silentOutsider = outsideEvents.next('change', 500).then(
+      () => true,
+      (e) => {
+        assert.equal(e.message, '消息事件等待超时');
+        return false;
+      },
+    );
+    assert.equal(await silentOutsider, false);
+    assert.equal(
+      (await bob.call(dmPath(alice, 'read'), 'PUT', { upToId: sent.body.data.message.id })).status,
+      200,
+    );
+    assert.deepEqual(await aliceEvents.next('change'), {});
+    closeChatEvents();
+    await assert.rejects(aliceEvents.next('change', 1500), /消息事件连接提前结束/);
+    const reconnected = await openChatEvents(bob);
+    streams.push(reconnected);
+    assert.deepEqual(await reconnected.next('ready'), {}, '关闭后连接配额正常释放，可以重新连接');
+  } finally {
+    await Promise.all(streams.map((s) => s.close()));
+    await clearChatPair(alice, bob);
   }
 });
 

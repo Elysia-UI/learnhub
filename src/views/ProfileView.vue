@@ -305,6 +305,12 @@ onUnmounted(() => {
           <Icon name="Pencil" :size="16" />编辑资料
         </button>
         <div v-else class="profile-social-actions">
+          <RouterLink
+            v-if="socialSummary?.isFriend"
+            :to="'/messages/' + person.id"
+            class="btn btn-secondary btn-sm"
+            ><Icon name="MessageSquare" :size="15" />发消息</RouterLink
+          >
           <FollowButton :user-id="person.id" /><RouterLink
             :to="`/search?q=${encodeURIComponent(person.name)}`"
             class="text-link"

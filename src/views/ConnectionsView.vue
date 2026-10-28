@@ -243,7 +243,18 @@ onUnmounted(() => {
               ></span
             ></RouterLink
           >
-          <FollowButton :user-id="user.id" compact />
+          <div class="connection-actions">
+            <RouterLink
+              v-if="
+                social.relationships[user.id]?.isFriend && user.id !== community.currentUser?.id
+              "
+              :to="'/messages/' + user.id"
+              class="btn btn-secondary btn-sm"
+            >
+              <Icon name="MessageSquare" :size="14" />发消息
+            </RouterLink>
+            <FollowButton :user-id="user.id" compact />
+          </div>
         </div>
         <EmptyState
           v-if="!items.length"
@@ -287,6 +298,23 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
+.connection-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-shrink: 0;
+}
+@media (max-width: 600px) {
+  .connection-actions {
+    flex-direction: column;
+    gap: 6px;
+  }
+  .connection-actions > a {
+    min-width: 82px;
+    white-space: nowrap;
+  }
+}
 .connections-page {
   max-width: 1060px;
   display: grid;

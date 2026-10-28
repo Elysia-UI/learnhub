@@ -18,6 +18,7 @@ import { aiRoutes, aiSettings } from './routes/ai.mjs';
 import { publicUser } from './security.mjs';
 import { adminRoutes } from './routes/admin.mjs';
 import { socialRoutes } from './routes/social.mjs';
+import { chatRoutes } from './routes/chat.mjs';
 export const app = express();
 app.disable('x-powered-by');
 app.use((req, res, next) => {
@@ -86,6 +87,7 @@ app.use(
   aiRoutes,
   personalRoutes,
   socialRoutes,
+  chatRoutes,
   catalogRoutes,
   forumRoutes,
   learningRoutes,

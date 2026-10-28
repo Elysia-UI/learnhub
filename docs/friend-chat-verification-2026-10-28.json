@@ -1,0 +1,68 @@
+{
+  "date": "2026-10-28",
+  "migration": "007_direct_messages.sql",
+  "tests": {
+    "frontend": {
+      "passed": 30,
+      "failed": 0
+    },
+    "api": {
+      "passed": 27,
+      "failed": 0,
+      "durationMs": 167337.6915
+    },
+    "build": {
+      "passed": true,
+      "viteSeconds": 13.45
+    },
+    "sseShutdownSupplement": {
+      "passed": 1,
+      "failed": 0,
+      "durationMs": 12803.7291
+    }
+  },
+  "browser": {
+    "incomingWithoutReload": true,
+    "unreadBadgeAppeared": true,
+    "openingConversationMarksRead": true,
+    "guiReplyPersisted": true,
+    "peerReceiptUpdatesWithoutReload": true,
+    "mobileReturnAndFriendEntry": true,
+    "restartRestoresSavedHistory": true,
+    "disconnectedSendShowsFailure": true,
+    "retryAfterRestoringNetwork": true,
+    "retryStoredRows": 1,
+    "networkOverrideRestored": true,
+    "mobile": {
+      "requestedWidth": 375,
+      "requestedHeight": 850,
+      "pageWidth": 360,
+      "contentWidth": 360
+    },
+    "normalFlowConsoleErrors": 0
+  },
+  "fixture": {
+    "counts": {
+      "messages": 3,
+      "fromPeer": 1,
+      "fromAdmin": 2,
+      "readMessages": 3
+    },
+    "cleanupPending": false,
+    "cleanup": {
+      "cleaned": true,
+      "remaining": {
+        "users": 0,
+        "messages": 0,
+        "conversations": 0,
+        "follows": 0,
+        "followEvents": 0
+      }
+    }
+  },
+  "limitations": [
+    "未发草稿与失败队列只在内存中保存，完整页面刷新后不会恢复",
+    "SSE提示在单应用进程内分发，多副本需要共享事件层",
+    "未进行并发压力、全部浏览器或正式公网部署验证"
+  ]
+}

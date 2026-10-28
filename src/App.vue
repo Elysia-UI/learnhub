@@ -2,11 +2,13 @@
 import { computed, ref, watch, onMounted, onUnmounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useCommunity } from './stores/community';
+import { useChat } from './stores/chat';
 import Icon from './components/Icon.vue';
 import Avatar from './components/Avatar.vue';
 import ModalHost from './components/ModalHost.vue';
 import { level } from './services/format';
 const store = useCommunity();
+const chat = useChat();
 const route = useRoute(),
   router = useRouter();
 const search = ref(''),
@@ -25,6 +27,7 @@ const mine = [
   { label: '我的收藏', icon: 'Heart', path: '/profile?tab=favorites' },
   { label: '我的帖子', icon: 'MessageSquare', path: '/profile?tab=posts' },
   { label: '关注与好友', icon: 'UsersRound', path: '/connections' },
+  { label: '好友聊天', icon: 'MessagesSquare', path: '/messages' },
   { label: '浏览历史', icon: 'Clock3', path: '/profile?tab=history' },
 ];
 const notifications = computed(() =>
@@ -56,8 +59,14 @@ watch(
     window.scrollTo({ top: 0 });
   },
 );
-onMounted(() => window.addEventListener('keydown', shortcut));
-onUnmounted(() => window.removeEventListener('keydown', shortcut));
+onMounted(() => {
+  window.addEventListener('keydown', shortcut);
+  chat.start();
+});
+onUnmounted(() => {
+  window.removeEventListener('keydown', shortcut);
+  chat.stop();
+});
 </script>
 <template>
   <header class="topbar">
@@ -97,6 +106,18 @@ onUnmounted(() => window.removeEventListener('keydown', shortcut));
       /><kbd>⌘ K</kbd>
     </form>
     <div class="header-actions">
+      <RouterLink
+        to="/messages"
+        class="icon-btn notification-trigger"
+        :aria-label="chat.unreadCount ? `好友聊天，${chat.unreadCount} 条未读` : '好友聊天'"
+        title="好友聊天"
+      >
+        <Icon name="MessagesSquare" :size="21" /><span
+          v-if="chat.unreadCount"
+          class="notification-badge"
+          >{{ chat.unreadCount > 99 ? '99+' : chat.unreadCount }}</span
+        >
+      </RouterLink>
       <div class="dropdown-anchor">
         <button
           class="icon-btn notification-trigger"
@@ -166,6 +187,7 @@ onUnmounted(() => window.removeEventListener('keydown', shortcut));
           </div>
           <RouterLink to="/profile"><Icon name="Users" :size="17" />个人中心</RouterLink
           ><RouterLink to="/connections"><Icon name="UsersRound" :size="17" />关注与好友</RouterLink
+          ><RouterLink to="/messages"><Icon name="MessagesSquare" :size="17" />好友聊天</RouterLink
           ><RouterLink to="/profile?tab=settings"
             ><Icon name="Settings" :size="17" />账号设置</RouterLink
           ><RouterLink to="/admin"><Icon name="ShieldCheck" :size="17" />后台管理</RouterLink

@@ -76,6 +76,8 @@ Vite preview 只预览产物，不能替代后端，/api 也需要代理。日�
 
 ## 本轮升级和 AI 配置
 
+好友聊天升级同样先执行 `npm run db:migrate`。反向代理 `/api/chat/events` 关闭缓存和响应缓冲，使用 HTTP/1.1，保留 Cookie/Origin，读取超时大于 25 秒心跳间隔（例如 90 秒）。当前按单应用进程分发提示，多副本需要共享事件层；详见[好友聊天记录](friend-chat.md)。
+
 已有数据环境先运行 `npm run db:migrate`，再运行 `node scripts/backfill-badges.mjs`，不清库。新环境 `npm run db:init` 会执行迁移和徽章补录。
 
 AI_BASE_URL、AI_API_KEY、AI_MODEL 在服务端 `.env` 配置后重启，使用兼容 `/chat/completions` 的 SSE 服务，详见 [功能补齐记录](feature-implementation.md)。2026-10-28 当前本机已完成阶跃星辰 Step Plan / step-5-preview 的两轮真实联调；迁移到其他环境仍须单独供应密钥，详见 [接入记录](ai-stepfun-verification.md)。
