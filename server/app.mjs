@@ -17,6 +17,7 @@ import { personalRoutes } from './routes/personal.mjs';
 import { aiRoutes, aiSettings } from './routes/ai.mjs';
 import { publicUser } from './security.mjs';
 import { adminRoutes } from './routes/admin.mjs';
+import { socialRoutes } from './routes/social.mjs';
 export const app = express();
 app.disable('x-powered-by');
 app.use((req, res, next) => {
@@ -84,6 +85,7 @@ app.use(
   '/api',
   aiRoutes,
   personalRoutes,
+  socialRoutes,
   catalogRoutes,
   forumRoutes,
   learningRoutes,

@@ -9,6 +9,7 @@ import Icon from '../components/Icon.vue';
 import Avatar from '../components/Avatar.vue';
 import Markdown from '../components/Markdown.vue';
 import EmptyState from '../components/EmptyState.vue';
+import FollowButton from '../components/FollowButton.vue';
 const store = useCommunity(),
   route = useRoute(),
   answer = ref(''),
@@ -93,11 +94,20 @@ watch(
         </div>
         <h1>{{ question.title }}</h1>
         <div class="article-author">
-          <Avatar :user="store.user(question.authorId)" :size="38" />
+          <RouterLink
+            :to="`/members/${question.authorId}`"
+            :aria-label="`查看${store.user(question.authorId).name}的主页`"
+            ><Avatar :user="store.user(question.authorId)" :size="38"
+          /></RouterLink>
           <div>
-            <strong>{{ store.user(question.authorId).name }}</strong>
+            <strong
+              ><RouterLink :to="`/members/${question.authorId}`">{{
+                store.user(question.authorId).name
+              }}</RouterLink></strong
+            >
             <p>{{ timeAgo(question.createdAt) }}<span>·</span>{{ question.views }} 次阅读</p>
           </div>
+          <FollowButton :user-id="question.authorId" compact class="question-follow" />
           <button
             v-if="question.authorId === store.currentUser?.id"
             class="icon-btn"
@@ -139,9 +149,17 @@ watch(
           <Icon name="CheckCircle2" :size="19" />提问者已采纳此回答
         </div>
         <div class="article-author">
-          <Avatar :user="store.user(a.authorId)" :size="38" />
+          <RouterLink
+            :to="`/members/${a.authorId}`"
+            :aria-label="`查看${store.user(a.authorId).name}的主页`"
+            ><Avatar :user="store.user(a.authorId)" :size="38"
+          /></RouterLink>
           <div>
-            <strong>{{ store.user(a.authorId).name }}</strong>
+            <strong
+              ><RouterLink :to="`/members/${a.authorId}`">{{
+                store.user(a.authorId).name
+              }}</RouterLink></strong
+            >
             <p>{{ timeAgo(a.createdAt) }}</p>
           </div>
           <button
@@ -252,3 +270,17 @@ watch(
     >
   </section>
 </template>
+
+<style scoped>
+.question-follow {
+  margin-left: auto;
+}
+@media (max-width: 480px) {
+  .article-author {
+    flex-wrap: wrap;
+  }
+  .article-author > div {
+    min-width: 0;
+  }
+}
+</style>

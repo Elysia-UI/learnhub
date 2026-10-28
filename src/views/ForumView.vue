@@ -15,6 +15,7 @@ const store = useCommunity(),
   keyword = ref(''),
   page = ref(1);
 const category = computed(() => String(route.query.category || 'all'));
+const following = computed(() => route.query.scope === 'following');
 const currentCategory = computed(() => store.category(category.value));
 const posts = ref<import('../data/types').Post[]>([]),
   total = ref(0),
@@ -25,6 +26,12 @@ async function fetchPosts() {
   const number = ++requestNo;
   listLoading.value = true;
   listError.value = '';
+  posts.value = [];
+  total.value = 0;
+  if (following.value && !store.currentUser) {
+    listLoading.value = false;
+    return;
+  }
   try {
     const params = new URLSearchParams({
       page: String(page.value),
@@ -33,6 +40,7 @@ async function fetchPosts() {
       category: category.value,
       sort: sort.value === '最热' ? 'hot' : sort.value === '精华' ? 'featured' : 'latest',
     });
+    if (following.value) params.set('scope', 'following');
     const result = await api<{
       items: import('../data/types').Post[];
       users: any[];
@@ -49,7 +57,19 @@ async function fetchPosts() {
     if (number === requestNo) listLoading.value = false;
   }
 }
-watch([category, sort, keyword], () => {
+function chooseScope(value: boolean) {
+  void router.push({
+    path: '/forum',
+    query: { ...route.query, scope: value ? 'following' : undefined },
+  });
+}
+function chooseCategory(id: string) {
+  void router.push({
+    path: '/forum',
+    query: { ...route.query, category: id === 'all' ? undefined : id },
+  });
+}
+watch([category, sort, keyword, following, () => store.currentUser?.id], () => {
   if (page.value === 1) void fetchPosts();
   else page.value = 1;
 });
@@ -73,14 +93,29 @@ void fetchPosts();
           ><Icon name="Pencil" :size="17" />发布帖子</RouterLink
         >
       </div>
+      <nav class="forum-feed-scope" aria-label="讨论来源">
+        <button
+          :class="{ active: !following }"
+          :aria-pressed="!following"
+          @click="chooseScope(false)"
+        >
+          <Icon name="MessagesSquare" :size="17" />发现讨论
+        </button>
+        <button :class="{ active: following }" :aria-pressed="following" @click="chooseScope(true)">
+          <Icon name="Users" :size="17" />关注动态
+        </button>
+        <RouterLink v-if="store.currentUser" to="/connections" class="text-link"
+          >管理关注<Icon name="ArrowUpRight" :size="14"
+        /></RouterLink>
+      </nav>
       <div class="category-pills">
-        <button :class="{ active: category === 'all' }" @click="router.push('/forum')">
+        <button :class="{ active: category === 'all' }" @click="chooseCategory('all')">
           全部讨论</button
         ><button
           v-for="c in store.data.categories.filter((c) => c.enabled !== false)"
           :key="c.id"
           :class="{ active: category === c.id }"
-          @click="router.push({ path: '/forum', query: { category: c.id } })"
+          @click="chooseCategory(c.id)"
         >
           {{ c.name }}
         </button>
@@ -108,11 +143,27 @@ void fetchPosts();
         <div v-if="listError" class="form-error">
           {{ listError }}<button class="text-link" @click="fetchPosts">重试</button>
         </div>
+        <EmptyState
+          v-if="following && !store.currentUser"
+          title="登录后查看关注动态"
+          description="关注感兴趣的学习伙伴，他们的新帖子会出现在这里。"
+          icon="Users"
+        >
+          <button class="btn btn-primary" @click="store.requireUser()">登录社区</button>
+        </EmptyState>
         <PostRow v-for="post in posts" :key="post.id" :post="post" /><EmptyState
-          v-if="!listLoading && !listError && !posts.length"
-          title="暂时没有相关讨论"
-          description="换个关键词试试，或成为第一个分享的人。"
-          ><RouterLink to="/forum/new" class="btn btn-primary">发布新帖</RouterLink></EmptyState
+          v-if="!listLoading && !listError && !posts.length && (!following || store.currentUser)"
+          :title="following ? '这里还没有关注动态' : '暂时没有相关讨论'"
+          :description="
+            following
+              ? '关注你感兴趣的作者后，他们公开发布的帖子会出现在这里；也可以调整分类和关键词。'
+              : '换个关键词试试，或成为第一个分享的人。'
+          "
+          ><RouterLink v-if="following" to="/leaderboard" class="btn btn-primary"
+            >发现学习伙伴</RouterLink
+          ><RouterLink v-else to="/forum/new" class="btn btn-primary"
+            >发布新帖</RouterLink
+          ></EmptyState
         ><Pagination v-model="page" :total="total" />
       </section>
       <div class="list-end" v-if="total > 0 && total <= 8">
@@ -122,3 +173,47 @@ void fetchPosts();
     <RightRail />
   </div>
 </template>
+
+<style scoped>
+.forum-feed-scope {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: -4px 0 18px;
+}
+.forum-feed-scope > button {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 10px 16px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--card);
+  color: var(--subtle);
+  font-weight: 600;
+}
+.forum-feed-scope > button.active {
+  color: var(--primary);
+  background: var(--hover);
+  border-color: var(--primary);
+}
+.forum-feed-scope > a {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin-left: auto;
+  white-space: nowrap;
+}
+@media (max-width: 480px) {
+  .forum-feed-scope {
+    gap: 6px;
+  }
+  .forum-feed-scope > button {
+    padding: 9px 10px;
+    font-size: 12px;
+  }
+  .forum-feed-scope > a {
+    font-size: 11px;
+  }
+}
+</style>

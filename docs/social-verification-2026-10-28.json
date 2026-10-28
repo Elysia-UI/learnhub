@@ -1,0 +1,49 @@
+{
+  "date": "2026-10-28",
+  "migration": "006_social_follows.sql",
+  "tests": {
+    "frontend": {
+      "passed": 22,
+      "failed": 0
+    },
+    "api": {
+      "passed": 22,
+      "failed": 0,
+      "durationMs": 120767.8428
+    },
+    "build": {
+      "passed": true,
+      "viteSeconds": 14.15
+    }
+  },
+  "browser": {
+    "profileFollowBack": true,
+    "mutualFriendList": true,
+    "feedShowsFollowedAuthorPost": true,
+    "restartPreservesRelationship": true,
+    "unfollowRemovesFriend": true,
+    "unfollowRemovesFeedPost": true,
+    "notificationVisibleAndNavigates": true,
+    "notificationReadVerifiedInDatabase": true,
+    "profileTabSwitchNoConsoleError": true,
+    "mobile": {
+      "width": 375,
+      "height": 850,
+      "contentWidth": 375,
+      "pageWidth": 375
+    },
+    "errorsAndWarnings": 0
+  },
+  "fixture": {
+    "followRowsBeforeCleanup": 1,
+    "followNotifications": 1,
+    "notificationRead": true,
+    "remaining": {
+      "users": 0,
+      "posts": 0,
+      "follows": 0,
+      "notificationEvents": 0
+    },
+    "cleaned": true
+  }
+}

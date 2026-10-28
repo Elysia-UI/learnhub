@@ -24,6 +24,7 @@ const mine = [
   { label: '我的课程', icon: 'BookOpen', path: '/profile?tab=courses' },
   { label: '我的收藏', icon: 'Heart', path: '/profile?tab=favorites' },
   { label: '我的帖子', icon: 'MessageSquare', path: '/profile?tab=posts' },
+  { label: '关注与好友', icon: 'UsersRound', path: '/connections' },
   { label: '浏览历史', icon: 'Clock3', path: '/profile?tab=history' },
 ];
 const notifications = computed(() =>
@@ -121,7 +122,11 @@ onUnmounted(() => window.removeEventListener('keydown', shortcut));
             class="notification-mini"
             @click="store.markRead(n.id)"
             ><span class="mini-notice-icon"
-              ><Icon :name="n.type === 'system' ? 'Bell' : 'MessagesSquare'" :size="17" /></span
+              ><Icon
+                :name="
+                  n.type === 'system' ? 'Bell' : n.type === 'follow' ? 'UserPlus' : 'MessagesSquare'
+                "
+                :size="17" /></span
             ><span
               ><strong>{{ n.title }}</strong
               ><small>{{ n.content }}</small></span
@@ -160,6 +165,7 @@ onUnmounted(() => window.removeEventListener('keydown', shortcut));
             <span>{{ store.currentUser ? '已登录 · 学习同步中' : '欢迎来到知学社区' }}</span>
           </div>
           <RouterLink to="/profile"><Icon name="Users" :size="17" />个人中心</RouterLink
+          ><RouterLink to="/connections"><Icon name="UsersRound" :size="17" />关注与好友</RouterLink
           ><RouterLink to="/profile?tab=settings"
             ><Icon name="Settings" :size="17" />账号设置</RouterLink
           ><RouterLink to="/admin"><Icon name="ShieldCheck" :size="17" />后台管理</RouterLink

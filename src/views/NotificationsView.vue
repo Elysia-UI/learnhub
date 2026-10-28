@@ -61,13 +61,15 @@ function remove(id: string) {
         <span class="notice-large-icon"
           ><Icon
             :name="
-              n.type === 'system'
-                ? 'Bell'
-                : n.type === 'like'
-                  ? 'Heart'
-                  : n.type === 'accepted'
-                    ? 'CheckCircle2'
-                    : 'MessagesSquare'
+              n.type === 'follow'
+                ? 'UserPlus'
+                : n.type === 'system'
+                  ? 'Bell'
+                  : n.type === 'like'
+                    ? 'Heart'
+                    : n.type === 'accepted'
+                      ? 'CheckCircle2'
+                      : 'MessagesSquare'
             "
             :size="23" /></span
         ><RouterLink :to="n.link || '/announcements'" @click="store.markRead(n.id)"

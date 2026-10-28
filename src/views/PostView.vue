@@ -7,6 +7,7 @@ import Icon from '../components/Icon.vue';
 import Avatar from '../components/Avatar.vue';
 import Markdown from '../components/Markdown.vue';
 import EmptyState from '../components/EmptyState.vue';
+import FollowButton from '../components/FollowButton.vue';
 const store = useCommunity(),
   route = useRoute(),
   router = useRouter(),
@@ -84,16 +85,23 @@ async function copyLink() {
           >
         </div>
         <div class="article-author">
-          <Avatar :user="store.user(post.authorId)" :size="42" />
+          <RouterLink
+            :to="`/members/${post.authorId}`"
+            :aria-label="`查看${store.user(post.authorId).name}的主页`"
+            ><Avatar :user="store.user(post.authorId)" :size="42"
+          /></RouterLink>
           <div>
             <strong
-              >{{ store.user(post.authorId).name
-              }}<span class="level-badge"
+              ><RouterLink :to="`/members/${post.authorId}`">{{
+                store.user(post.authorId).name
+              }}</RouterLink>
+              <span class="level-badge"
                 >Lv.{{ level(store.user(post.authorId).points) }}</span
               ></strong
             >
             <p>{{ timeAgo(post.createdAt) }}<span>·</span>{{ post.views }} 次阅读</p>
           </div>
+          <FollowButton :user-id="post.authorId" compact class="article-follow" />
           <div v-if="mine || store.currentUser?.role === 'admin'" class="author-actions">
             <RouterLink :to="`/forum/${post.id}/edit`" class="icon-btn" aria-label="编辑帖子"
               ><Icon name="Pencil" :size="18" /></RouterLink
@@ -206,6 +214,7 @@ async function copyLink() {
           }}<span class="level-badge">Lv.{{ level(store.user(post.authorId).points) }}</span>
         </h3>
         <p>{{ store.user(post.authorId).bio }}</p>
+        <FollowButton :user-id="post.authorId" class="author-follow" />
         <div class="author-stat-grid">
           <span
             ><strong>{{
@@ -238,3 +247,23 @@ async function copyLink() {
     >
   </section>
 </template>
+
+<style scoped>
+.article-follow {
+  margin-left: auto;
+}
+.author-follow {
+  margin: 5px 0 14px;
+}
+@media (max-width: 480px) {
+  .article-author {
+    flex-wrap: wrap;
+  }
+  .article-author > div:not(.author-actions) {
+    min-width: 0;
+  }
+  .article-author strong {
+    flex-wrap: wrap;
+  }
+}
+</style>

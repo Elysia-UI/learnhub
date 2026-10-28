@@ -55,6 +55,19 @@ forumRoutes.get('/posts', async (req, res) => {
   const f = pageParams(req.query),
     where = ["p.status='published'"],
     args = [];
+  assert(
+    req.query.scope === undefined || ['all', 'following'].includes(req.query.scope),
+    400,
+    '讨论范围无效',
+  );
+  if (req.query.scope === 'following') {
+    assert(req.user, 401, '请先登录后查看关注动态');
+    where.push(
+      "EXISTS(SELECT 1 FROM user_follows f JOIN users u ON u.id=f.followee_id AND u.status='active' WHERE f.follower_id=? AND f.followee_id=p.author_id)",
+    );
+    args.push(req.user.id);
+    res.set('Cache-Control', 'private, no-store');
+  }
   if (f.category !== 'all') {
     where.push('p.category_id=?');
     args.push(f.category);

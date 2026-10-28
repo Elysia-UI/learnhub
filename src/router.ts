@@ -59,6 +59,16 @@ const router = createRouter({
       meta: { title: '个人中心' },
     },
     {
+      path: '/connections',
+      component: () => import('./views/ConnectionsView.vue'),
+      meta: { title: '我的学习伙伴' },
+    },
+    {
+      path: '/members/:id/connections',
+      component: () => import('./views/ConnectionsView.vue'),
+      meta: { title: '学习伙伴' },
+    },
+    {
       path: '/members/:id',
       component: () => import('./views/ProfileView.vue'),
       meta: { title: '社区伙伴' },

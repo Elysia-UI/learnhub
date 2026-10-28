@@ -245,6 +245,247 @@ test('发帖与评论真正写入云数据库，独立客户端可重新读取',
   const [count] = await query('SELECT COUNT(*) AS n FROM post_comments WHERE post_id=?', [postId]);
   assert.equal(count.n, 1);
 });
+test('关注幂等写入、粉丝分页、互关好友、通知去重与访问边界', async () => {
+  const follow = (actor, id, active) => actor.call(`/api/members/${id}/follow`, 'PUT', { active });
+  const social = (actor, id) => actor.call(`/api/members/${id}/social`);
+  const before = await query('SELECT id,points FROM users WHERE id IN (?,?) ORDER BY id', [
+    alice.id,
+    bob.id,
+  ]);
+  const checks = await Promise.all([
+    follow(client(), bob.id, true),
+    follow(alice, alice.id, true),
+    follow(alice, alice.id.toUpperCase(), true),
+    alice.call(`/api/members/${bob.id}/follow`, 'PUT', { active: 'true' }),
+    alice.call(`/api/members/${bob.id}/follow`, 'PUT', {}),
+    follow(alice, 'missing-social-' + stamp, true),
+    alice.call(`/api/members/${bob.id}/follow`, 'PUT', { active: true }, { 'X-CSRF-Token': '' }),
+    alice.call(`/api/members/${alice.id}/connections?type=invalid`),
+  ]);
+  assert.deepEqual(
+    checks.map((r) => r.status),
+    [401, 400, 400, 400, 400, 404, 403, 400],
+  );
+  try {
+    // Force the first insert through the alias, so a later canonical request
+    // cannot hide accidentally persisted mixed-case foreign keys.
+    assert.equal((await follow(alice, bob.id.toUpperCase(), true)).status, 200);
+    const repeated = await Promise.all(
+      [bob.id, bob.id.toUpperCase(), bob.id].map((id) => follow(alice, id, true)),
+    );
+    assert.ok(
+      repeated.every((r) => r.status === 200),
+      JSON.stringify(repeated),
+    );
+    const rows = await query(
+      'SELECT follower_id,followee_id FROM user_follows WHERE follower_id=? AND followee_id=?',
+      [alice.id, bob.id],
+    );
+    assert.equal(rows.length, 1);
+    assert.equal(rows[0].follower_id, alice.id);
+    assert.equal(rows[0].followee_id, bob.id);
+    const [notice] = await query(
+      "SELECT COUNT(*) AS n FROM notifications WHERE user_id=? AND type='follow' AND link=?",
+      [bob.id, '/members/' + alice.id],
+    );
+    assert.equal(notice.n, 1);
+    const independent = client();
+    independent.cookie = alice.cookie;
+    const fresh = await social(independent, bob.id);
+    assert.equal(fresh.status, 200);
+    assert.equal(fresh.headers.get('cache-control'), 'private, no-store');
+    assert.deepEqual(fresh.body.data, {
+      followingCount: 0,
+      followersCount: 1,
+      friendsCount: 0,
+      following: true,
+      followsYou: false,
+      isFriend: false,
+    });
+    const guest = await social(client(), bob.id);
+    assert.equal(guest.body.data.followersCount, 1);
+    assert.equal(guest.body.data.following, false);
+    assert.equal(guest.body.data.followsYou, false);
+    const listing = await alice.call(
+      `/api/members/${alice.id}/connections?type=following&pageSize=1&q=${encodeURIComponent('验收用户B')}`,
+    );
+    assert.equal(listing.status, 200);
+    assert.equal(listing.body.data.total, 1);
+    assert.equal(listing.body.data.pageSize, 1);
+    assert.equal(listing.body.data.items[0].id, bob.id);
+    assert.equal(listing.body.data.items[0].relationship.following, true);
+    assert.ok(!('email' in listing.body.data.items[0]));
+    assert.ok(!('password_hash' in listing.body.data.items[0]));
+    const fans = await client().call(`/api/members/${bob.id}/connections?type=followers`);
+    assert.equal(fans.status, 200);
+    assert.equal(fans.body.data.items[0].id, alice.id);
+    const next = await alice.call(
+      `/api/members/${alice.id}/connections?type=following&pageSize=1&page=2`,
+    );
+    assert.equal(next.body.data.total, 1);
+    assert.deepEqual(next.body.data.items, []);
+    assert.equal(
+      (
+        await alice.call(
+          `/api/members/${alice.id}/connections?type=following&q=${encodeURIComponent("' OR 1=1 --")}`,
+        )
+      ).body.data.total,
+      0,
+    );
+    assert.equal(
+      (await alice.call(`/api/members/${alice.id}/connections?pageSize=5000`)).status,
+      400,
+    );
+    assert.equal((await follow(bob, alice.id, true)).body.data.isFriend, true);
+    assert.equal((await social(alice, alice.id)).body.data.friendsCount, 1);
+    const friends = await alice.call(`/api/members/${alice.id}/connections?type=friends`);
+    assert.equal(friends.status, 200);
+    assert.equal(friends.body.data.total, 1);
+    assert.equal(friends.body.data.items[0].id, bob.id);
+    assert.equal(friends.body.data.items[0].relationship.isFriend, true);
+    assert.equal((await bob.call(`/api/members/${alice.id}/connections?type=friends`)).status, 403);
+    assert.equal(
+      (await client().call(`/api/members/${alice.id}/connections?type=friends`)).status,
+      401,
+    );
+    const removed = await follow(alice, bob.id, false);
+    assert.equal(removed.status, 200);
+    assert.equal(removed.body.data.followersCount, 0);
+    assert.equal(removed.body.data.isFriend, false);
+    assert.equal((await social(alice, alice.id)).body.data.friendsCount, 0);
+    assert.equal((await follow(alice, bob.id, true)).status, 200);
+    assert.equal(
+      (
+        await query(
+          "SELECT COUNT(*) AS n FROM notifications WHERE user_id=? AND type='follow' AND link=?",
+          [bob.id, '/members/' + alice.id],
+        )
+      )[0].n,
+      1,
+    );
+    const [firstNotice] = await query(
+      "SELECT id FROM notifications WHERE user_id=? AND type='follow' AND link=?",
+      [bob.id, '/members/' + alice.id],
+    );
+    assert.equal((await bob.call('/api/notifications/' + firstNotice.id, 'DELETE')).status, 200);
+    await follow(alice, bob.id, false);
+    await follow(alice, bob.id, true);
+    assert.equal(
+      (
+        await query(
+          "SELECT COUNT(*) AS n FROM notifications WHERE user_id=? AND type='follow' AND link=?",
+          [bob.id, '/members/' + alice.id],
+        )
+      )[0].n,
+      0,
+    );
+    assert.deepEqual(
+      await query('SELECT id,points FROM users WHERE id IN (?,?) ORDER BY id', [alice.id, bob.id]),
+      before,
+      '关注和回关不发放积分',
+    );
+  } finally {
+    await follow(alice, bob.id, false);
+    await follow(bob, alice.id, false);
+  }
+});
+
+test('关注动态从数据库分页读取，仅包含已关注作者的公开帖子', async () => {
+  let pendingId;
+  try {
+    assert.equal((await client().call('/api/posts?scope=following')).status, 401);
+    assert.equal((await bob.call('/api/posts?scope=invalid')).status, 400);
+    assert.equal(
+      (await bob.call(`/api/members/${alice.id}/follow`, 'PUT', { active: true })).status,
+      200,
+    );
+    const pending = await alice.call('/api/posts', 'POST', {
+      title: `关注动态待审测试 ${stamp}`,
+      content: '这篇帖子尚未审核通过，关注作者的用户也不应通过关注动态读取其内容。',
+      category: 'tech',
+      type: '分享',
+      tags: ['关注动态'],
+    });
+    assert.equal(pending.status, 201);
+    pendingId = pending.body.data.id;
+    assert.equal(pending.body.data.status, 'pending');
+    const first = await bob.call(
+      '/api/posts?' +
+        new URLSearchParams({
+          scope: 'following',
+          q: stamp,
+          category: 'tech',
+          sort: 'hot',
+          pageSize: '1',
+        }),
+    );
+    assert.equal(first.status, 200, JSON.stringify(first.body));
+    assert.equal(first.body.data.total, 1);
+    assert.equal(first.body.data.items[0].id, postId);
+    assert.ok(
+      first.body.data.items.every((p) => p.authorId === alice.id && p.status === 'published'),
+    );
+    assert.ok(!first.body.data.items.some((p) => p.id === pendingId));
+    const emptyPage = await bob.call(`/api/posts?scope=following&q=${stamp}&pageSize=1&page=2`);
+    assert.equal(emptyPage.body.data.total, 1);
+    assert.deepEqual(emptyPage.body.data.items, []);
+    const wrongCategory = await bob.call(`/api/posts?scope=following&q=${stamp}&category=design`);
+    assert.equal(wrongCategory.body.data.total, 0);
+    const notFollowed = await alice.call(`/api/posts?scope=following&q=${stamp}`);
+    assert.equal(notFollowed.body.data.total, 0);
+    await bob.call(`/api/members/${alice.id}/follow`, 'PUT', { active: false });
+    const after = await bob.call(`/api/posts?scope=following&q=${stamp}`);
+    assert.equal(after.body.data.total, 0);
+    assert.deepEqual(after.body.data.items, []);
+  } finally {
+    if (pendingId)
+      await query('DELETE FROM posts WHERE id=? AND author_id=?', [pendingId, alice.id]);
+    await bob.call(`/api/members/${alice.id}/follow`, 'PUT', { active: false });
+  }
+});
+
+test('停用用户无法被关注，旧关系不会计入关注、粉丝和好友列表', async () => {
+  const stopped = await register('SocialBan');
+  try {
+    assert.equal(
+      (await alice.call(`/api/members/${stopped.id}/follow`, 'PUT', { active: true })).status,
+      200,
+    );
+    assert.equal(
+      (await stopped.call(`/api/members/${alice.id}/follow`, 'PUT', { active: true })).status,
+      200,
+    );
+    assert.equal(
+      (await admin.call(`/api/admin/users/${stopped.id}`, 'PATCH', { status: 'banned' })).status,
+      200,
+    );
+    const checks = await Promise.all([
+      alice.call(`/api/members/${stopped.id}/follow`, 'PUT', { active: true }),
+      alice.call(`/api/members/${stopped.id}/social`),
+      client().call(`/api/members/${stopped.id}/connections?type=followers`),
+    ]);
+    assert.deepEqual(
+      checks.map((r) => r.status),
+      [404, 404, 404],
+    );
+    const summary = await alice.call(`/api/members/${alice.id}/social`);
+    assert.equal(summary.body.data.followingCount, 0);
+    assert.equal(summary.body.data.followersCount, 0);
+    assert.equal(summary.body.data.friendsCount, 0);
+    for (const type of ['following', 'followers', 'friends']) {
+      const r = await alice.call(`/api/members/${alice.id}/connections?type=${type}`);
+      assert.equal(r.status, 200);
+      assert.equal(r.body.data.total, 0);
+      assert.ok(!r.body.data.items.some((u) => u.id === stopped.id));
+    }
+  } finally {
+    await query('DELETE FROM user_follows WHERE follower_id=? OR followee_id=?', [
+      stopped.id,
+      stopped.id,
+    ]);
+  }
+});
+
 test('编辑和删除校验归属，回复必须属于当前帖子', async () => {
   const body = {
     title: `更新后的验收帖子 ${stamp}`,
