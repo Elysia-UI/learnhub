@@ -5,7 +5,7 @@
 Node.js 24+，当前专用云连接已加密配置。
 
 ```powershell
-cd /path/to/learnhub
+cd learnhub
 npm ci
 npm run db:init
 npm start

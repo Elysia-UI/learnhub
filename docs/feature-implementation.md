@@ -37,7 +37,7 @@ AI_MODEL=your-provider-model-id
 新增迁移 `004_complete_workflows.sql`、`005_ai_attempt_limits.sql` 已在项目云库执行。增加评价、徽章、请求回执、AI 消息和调用记录表，以及审核、启停和悬赏字段。
 
 ```powershell
-cd /path/to/learnhub
+cd learnhub
 npm ci
 npm run db:init
 npm start

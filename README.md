@@ -13,7 +13,7 @@
 需要 Node.js 24+、MySQL 8。本机已配置加密的云数据库连接。
 
 ```powershell
-cd /path/to/learnhub
+cd learnhub
 npm ci
 npm run db:init
 npm start
