@@ -1,0 +1,354 @@
+{
+  "/images/ai.jpg": {
+    "src": "/images/optimized/ai.webp",
+    "width": 640,
+    "height": 427,
+    "originalBytes": 41194,
+    "bytes": 14006
+  },
+  "/images/avatar-1.jpg": {
+    "src": "/images/optimized/avatar-1.webp",
+    "width": 100,
+    "height": 100,
+    "originalBytes": 3405,
+    "bytes": 2556
+  },
+  "/images/avatar-2.jpg": {
+    "src": "/images/optimized/avatar-2.webp",
+    "width": 100,
+    "height": 100,
+    "originalBytes": 3157,
+    "bytes": 2134
+  },
+  "/images/avatar-3.jpg": {
+    "src": "/images/optimized/avatar-3.webp",
+    "width": 100,
+    "height": 100,
+    "originalBytes": 2915,
+    "bytes": 1698
+  },
+  "/images/avatar-4.jpg": {
+    "src": "/images/optimized/avatar-4.webp",
+    "width": 100,
+    "height": 100,
+    "originalBytes": 3855,
+    "bytes": 3138
+  },
+  "/images/avatar-5.jpg": {
+    "src": "/images/optimized/avatar-5.webp",
+    "width": 100,
+    "height": 100,
+    "originalBytes": 3247,
+    "bytes": 2280
+  },
+  "/images/code.jpg": {
+    "src": "/images/optimized/code.webp",
+    "width": 640,
+    "height": 426,
+    "originalBytes": 53833,
+    "bytes": 24890
+  },
+  "/images/community/ai-workbench.png": {
+    "src": "/images/optimized/ai-workbench.webp",
+    "width": 1000,
+    "height": 563,
+    "originalBytes": 2270189,
+    "bytes": 98478
+  },
+  "/images/community/analytics.jpg": {
+    "src": "/images/optimized/analytics.webp",
+    "width": 1000,
+    "height": 712,
+    "originalBytes": 99762,
+    "bytes": 36992
+  },
+  "/images/community/art.jpg": {
+    "src": "/images/optimized/art.webp",
+    "width": 1000,
+    "height": 667,
+    "originalBytes": 108459,
+    "bytes": 56334
+  },
+  "/images/community/campus.jpg": {
+    "src": "/images/optimized/campus.webp",
+    "width": 1000,
+    "height": 667,
+    "originalBytes": 119213,
+    "bytes": 53696
+  },
+  "/images/community/cat.jpg": {
+    "src": "/images/optimized/cat.webp",
+    "width": 1000,
+    "height": 688,
+    "originalBytes": 71246,
+    "bytes": 21114
+  },
+  "/images/community/coding.jpg": {
+    "src": "/images/optimized/coding.webp",
+    "width": 1000,
+    "height": 667,
+    "originalBytes": 91232,
+    "bytes": 33172
+  },
+  "/images/community/coffee.jpg": {
+    "src": "/images/optimized/coffee.webp",
+    "width": 1000,
+    "height": 1500,
+    "originalBytes": 261091,
+    "bytes": 108862
+  },
+  "/images/community/desk.jpg": {
+    "src": "/images/optimized/desk.webp",
+    "width": 1000,
+    "height": 666,
+    "originalBytes": 101221,
+    "bytes": 46980
+  },
+  "/images/community/dog.jpg": {
+    "src": "/images/optimized/dog.webp",
+    "width": 1000,
+    "height": 1333,
+    "originalBytes": 182524,
+    "bytes": 103074
+  },
+  "/images/community/flowers.jpg": {
+    "src": "/images/optimized/flowers.webp",
+    "width": 1000,
+    "height": 667,
+    "originalBytes": 116879,
+    "bytes": 55434
+  },
+  "/images/community/forest.jpg": {
+    "src": "/images/optimized/forest.webp",
+    "width": 1000,
+    "height": 667,
+    "originalBytes": 38590,
+    "bytes": 9906
+  },
+  "/images/community/fox-avatar.png": {
+    "src": "/images/optimized/fox-avatar.webp",
+    "width": 320,
+    "height": 320,
+    "originalBytes": 2357407,
+    "bytes": 18818
+  },
+  "/images/community/gaming.jpg": {
+    "src": "/images/optimized/gaming.webp",
+    "width": 1000,
+    "height": 667,
+    "originalBytes": 104207,
+    "bytes": 51184
+  },
+  "/images/community/lake.jpg": {
+    "src": "/images/optimized/lake.webp",
+    "width": 1000,
+    "height": 667,
+    "originalBytes": 164439,
+    "bytes": 99550
+  },
+  "/images/community/library.jpg": {
+    "src": "/images/optimized/library.webp",
+    "width": 1000,
+    "height": 586,
+    "originalBytes": 206893,
+    "bytes": 141352
+  },
+  "/images/community/mountains.jpg": {
+    "src": "/images/optimized/mountains.webp",
+    "width": 1000,
+    "height": 667,
+    "originalBytes": 155703,
+    "bytes": 81392
+  },
+  "/images/community/ocean.jpg": {
+    "src": "/images/optimized/ocean.webp",
+    "width": 1000,
+    "height": 667,
+    "originalBytes": 69680,
+    "bytes": 25804
+  },
+  "/images/community/portrait-1.jpg": {
+    "src": "/images/optimized/portrait-1.webp",
+    "width": 160,
+    "height": 160,
+    "originalBytes": 6678,
+    "bytes": 5218
+  },
+  "/images/community/portrait-10.jpg": {
+    "src": "/images/optimized/portrait-10.webp",
+    "width": 160,
+    "height": 160,
+    "originalBytes": 5954,
+    "bytes": 4168
+  },
+  "/images/community/portrait-11.jpg": {
+    "src": "/images/optimized/portrait-11.webp",
+    "width": 160,
+    "height": 160,
+    "originalBytes": 5159,
+    "bytes": 3312
+  },
+  "/images/community/portrait-12.jpg": {
+    "src": "/images/optimized/portrait-12.webp",
+    "width": 160,
+    "height": 160,
+    "originalBytes": 4860,
+    "bytes": 3412
+  },
+  "/images/community/portrait-13.jpg": {
+    "src": "/images/optimized/portrait-13.webp",
+    "width": 160,
+    "height": 160,
+    "originalBytes": 4995,
+    "bytes": 3364
+  },
+  "/images/community/portrait-14.jpg": {
+    "src": "/images/optimized/portrait-14.webp",
+    "width": 160,
+    "height": 160,
+    "originalBytes": 6446,
+    "bytes": 5192
+  },
+  "/images/community/portrait-15.jpg": {
+    "src": "/images/optimized/portrait-15.webp",
+    "width": 160,
+    "height": 160,
+    "originalBytes": 6025,
+    "bytes": 4564
+  },
+  "/images/community/portrait-16.jpg": {
+    "src": "/images/optimized/portrait-16.webp",
+    "width": 160,
+    "height": 160,
+    "originalBytes": 3705,
+    "bytes": 2184
+  },
+  "/images/community/portrait-17.jpg": {
+    "src": "/images/optimized/portrait-17.webp",
+    "width": 160,
+    "height": 160,
+    "originalBytes": 5653,
+    "bytes": 4098
+  },
+  "/images/community/portrait-18.jpg": {
+    "src": "/images/optimized/portrait-18.webp",
+    "width": 160,
+    "height": 160,
+    "originalBytes": 7922,
+    "bytes": 7020
+  },
+  "/images/community/portrait-19.jpg": {
+    "src": "/images/optimized/portrait-19.webp",
+    "width": 160,
+    "height": 160,
+    "originalBytes": 5605,
+    "bytes": 4384
+  },
+  "/images/community/portrait-2.jpg": {
+    "src": "/images/optimized/portrait-2.webp",
+    "width": 160,
+    "height": 160,
+    "originalBytes": 5333,
+    "bytes": 3700
+  },
+  "/images/community/portrait-20.jpg": {
+    "src": "/images/optimized/portrait-20.webp",
+    "width": 160,
+    "height": 160,
+    "originalBytes": 3591,
+    "bytes": 1992
+  },
+  "/images/community/portrait-3.jpg": {
+    "src": "/images/optimized/portrait-3.webp",
+    "width": 160,
+    "height": 160,
+    "originalBytes": 5847,
+    "bytes": 4188
+  },
+  "/images/community/portrait-4.jpg": {
+    "src": "/images/optimized/portrait-4.webp",
+    "width": 160,
+    "height": 160,
+    "originalBytes": 4493,
+    "bytes": 3002
+  },
+  "/images/community/portrait-5.jpg": {
+    "src": "/images/optimized/portrait-5.webp",
+    "width": 160,
+    "height": 160,
+    "originalBytes": 7728,
+    "bytes": 6208
+  },
+  "/images/community/portrait-6.jpg": {
+    "src": "/images/optimized/portrait-6.webp",
+    "width": 160,
+    "height": 160,
+    "originalBytes": 7177,
+    "bytes": 6198
+  },
+  "/images/community/portrait-7.jpg": {
+    "src": "/images/optimized/portrait-7.webp",
+    "width": 160,
+    "height": 160,
+    "originalBytes": 5517,
+    "bytes": 3870
+  },
+  "/images/community/portrait-8.jpg": {
+    "src": "/images/optimized/portrait-8.webp",
+    "width": 160,
+    "height": 160,
+    "originalBytes": 5133,
+    "bytes": 3506
+  },
+  "/images/community/portrait-9.jpg": {
+    "src": "/images/optimized/portrait-9.webp",
+    "width": 160,
+    "height": 160,
+    "originalBytes": 6842,
+    "bytes": 5520
+  },
+  "/images/community/sunrise.jpg": {
+    "src": "/images/optimized/sunrise.webp",
+    "width": 1000,
+    "height": 667,
+    "originalBytes": 150358,
+    "bytes": 86662
+  },
+  "/images/community/team.jpg": {
+    "src": "/images/optimized/team.webp",
+    "width": 1000,
+    "height": 667,
+    "originalBytes": 150228,
+    "bytes": 75766
+  },
+  "/images/community/writing.jpg": {
+    "src": "/images/optimized/writing.webp",
+    "width": 1000,
+    "height": 751,
+    "originalBytes": 77218,
+    "bytes": 26334
+  },
+  "/images/hero.png": {
+    "src": "/images/optimized/hero.webp",
+    "width": 1920,
+    "height": 640,
+    "originalBytes": 2596988,
+    "bytes": 219756,
+    "srcset": "/images/optimized/hero-960.webp 960w, /images/optimized/hero.webp 1920w",
+    "mobileBytes": 72010
+  },
+  "/images/mountain.jpg": {
+    "src": "/images/optimized/mountain.webp",
+    "width": 640,
+    "height": 427,
+    "originalBytes": 88503,
+    "bytes": 53758
+  },
+  "/images/study.jpg": {
+    "src": "/images/optimized/study.webp",
+    "width": 640,
+    "height": 427,
+    "originalBytes": 47932,
+    "bytes": 17876
+  }
+}

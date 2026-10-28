@@ -7,7 +7,7 @@ const store = useCommunity();
 const slides = [
   {
     id: 'welcome',
-    image: '/images/hero.png',
+    image: '/images/optimized/hero.webp',
     alt: '阳光下的校园与正在阅读的同学',
     eyebrow: '更好的学习，遇见更大的世界',
     title: '欢迎来到 LearnHub',
@@ -24,7 +24,7 @@ const slides = [
   },
   {
     id: 'learn',
-    image: '/images/community/library.jpg',
+    image: '/images/optimized/library.webp',
     alt: '摆满书籍的图书馆书架',
     eyebrow: '给好奇心，留一点认真生长的时间',
     title: '把好奇，变成能力',
@@ -41,7 +41,7 @@ const slides = [
   },
   {
     id: 'community',
-    image: '/images/community/coding.jpg',
+    image: '/images/optimized/coding.webp',
     alt: '学习伙伴一起讨论电脑上的内容',
     eyebrow: '一份真实经验，也能成为别人的灵感',
     title: '好想法，值得被看见',
@@ -64,20 +64,94 @@ const index = ref(0),
   hidden = ref(false);
 const announcement = ref('');
 const slide = computed(() => slides[index.value]!);
+const heroSizes = '(max-width: 767px) 100vw, (max-width: 1200px) 75vw, 1200px';
+const heroSources = '/images/optimized/hero-960.webp 960w, /images/optimized/hero.webp 1920w';
 const playing = computed(
   () => !reducedMotion.value && !hovered.value && !hidden.value && !keyboardFocused.value,
 );
 let timer: ReturnType<typeof setTimeout> | undefined;
 let mounted = false;
 let motion: MediaQueryList | undefined;
+let visibleImageSettled = false;
+let selectionVersion = 0;
+let autoVersion = 0;
+const loaded = new Set<number>();
+const pending = new Map<
+  number,
+  { image: HTMLImageElement; promise: Promise<boolean>; finish: (success: boolean) => void }
+>();
+
+function loadSlide(next: number): Promise<boolean> {
+  if (loaded.has(next)) return Promise.resolve(true);
+  const existing = pending.get(next);
+  if (existing) return existing.promise;
+  const image = new Image();
+  image.fetchPriority = 'low';
+  image.decoding = 'async';
+  let resolve!: (success: boolean) => void;
+  let finished = false;
+  const promise = new Promise<boolean>((done) => (resolve = done));
+  const finish = (success: boolean) => {
+    if (finished) return;
+    finished = true;
+    image.onload = null;
+    image.onerror = null;
+    pending.delete(next);
+    if (success && mounted) loaded.add(next);
+    resolve(success);
+  };
+  pending.set(next, { image, promise, finish });
+  image.onload = async () => {
+    try {
+      if (typeof image.decode === 'function') await image.decode();
+      finish(true);
+    } catch {
+      finish(false);
+    }
+  };
+  image.onerror = () => finish(false);
+  if (next === 0) {
+    image.sizes = heroSizes;
+    image.srcset = heroSources;
+  }
+  image.src = slides[next]!.image;
+  return promise;
+}
 function schedule() {
   clearTimeout(timer);
-  if (mounted && playing.value)
-    timer = setTimeout(() => (index.value = (index.value + 1) % slides.length), 6000);
+  if (mounted && playing.value && visibleImageSettled)
+    timer = setTimeout(() => void select(index.value + 1, true), 6000);
 }
-function select(next: number) {
-  index.value = (next + slides.length) % slides.length;
-  announcement.value = `第 ${index.value + 1} 张，共 ${slides.length} 张：${slide.value.title}`;
+async function select(next: number, automatic = false) {
+  const target = (next + slides.length) % slides.length;
+  const version = ++selectionVersion;
+  const automaticVersion = autoVersion;
+  clearTimeout(timer);
+  if (target === index.value) {
+    schedule();
+    return;
+  }
+  const success = await loadSlide(target);
+  if (!mounted || version !== selectionVersion) return;
+  if (!success || (automatic && (!playing.value || automaticVersion !== autoVersion))) {
+    schedule();
+    return;
+  }
+  index.value = target;
+  visibleImageSettled = true;
+  if (!automatic)
+    announcement.value = `第 ${index.value + 1} 张，共 ${slides.length} 张：${slide.value.title}`;
+  schedule();
+}
+function visibleImageLoaded(event: Event) {
+  if ((event.target as HTMLImageElement).dataset.slideImage !== slide.value.id) return;
+  loaded.add(index.value);
+  visibleImageSettled = true;
+  schedule();
+}
+function visibleImageFailed(event: Event) {
+  if ((event.target as HTMLImageElement).dataset.slideImage !== slide.value.id) return;
+  visibleImageSettled = true;
   schedule();
 }
 function visibilityChanged() {
@@ -93,13 +167,13 @@ function focusLeft(event: FocusEvent) {
   if (!(event.currentTarget as HTMLElement).contains(event.relatedTarget as Node | null))
     keyboardFocused.value = false;
 }
-watch([playing, index], schedule);
+watch(playing, () => {
+  autoVersion++;
+  schedule();
+});
+watch(index, schedule);
 onMounted(() => {
   mounted = true;
-  for (const item of slides.slice(1)) {
-    const image = new Image();
-    image.src = item.image;
-  }
   motion = window.matchMedia('(prefers-reduced-motion: reduce)');
   motionChanged();
   motion.addEventListener('change', motionChanged);
@@ -109,7 +183,12 @@ onMounted(() => {
 });
 onUnmounted(() => {
   mounted = false;
+  selectionVersion++;
   clearTimeout(timer);
+  for (const { image, finish } of [...pending.values()]) {
+    finish(false);
+    image.src = '';
+  }
   motion?.removeEventListener('change', motionChanged);
   document.removeEventListener('visibilitychange', visibilityChanged);
 });
@@ -141,8 +220,14 @@ onUnmounted(() => {
         <img
           class="hero-art"
           :src="slide.image"
+          :srcset="index === 0 ? heroSources : undefined"
+          :sizes="index === 0 ? heroSizes : undefined"
+          :data-slide-image="slide.id"
           :alt="slide.alt"
-          :fetchpriority="index === 0 ? 'high' : 'auto'"
+          :fetchpriority="index === 0 ? 'high' : 'low'"
+          decoding="async"
+          @load="visibleImageLoaded"
+          @error="visibleImageFailed"
         />
         <div class="hero-gradient"></div>
         <div class="hero-content">

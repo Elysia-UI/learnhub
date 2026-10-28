@@ -1,12 +1,18 @@
 <script setup lang="ts">
 import type { Course } from '../data/types';
 import Icon from './Icon.vue';
+import { publicImage } from '../services/images';
 defineProps<{ course: Course }>();
 </script>
 <template>
   <div class="course-cover" :class="`cover-${course.visual}`">
-    <img v-if="course.image" :src="course.image" :alt="course.title" loading="lazy" /><template
-      v-if="course.visual === 'figma'"
+    <img
+      v-if="course.image"
+      :src="publicImage(course.image)"
+      :alt="course.title"
+      loading="lazy"
+      decoding="async"
+    /><template v-if="course.visual === 'figma'"
       ><div class="cover-orbit"></div>
       <div class="figma-symbol"><i></i><i></i><i></i><i></i><i></i></div>
       <span class="cover-caption">DESIGN YOUR IDEAS</span></template

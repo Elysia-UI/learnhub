@@ -7,6 +7,7 @@ import { api } from '../services/api';
 import Icon from '../components/Icon.vue';
 import Markdown from '../components/Markdown.vue';
 import EmptyState from '../components/EmptyState.vue';
+import { publicImage } from '../services/images';
 const store = useCommunity(),
   route = useRoute(),
   router = useRouter();
@@ -226,7 +227,7 @@ watch(
           placeholder="从一个有趣的问题、一段真实的经历开始…\n\n支持 Markdown：标题、列表、代码块与引用。"
         ></textarea>
         <div v-if="image" class="editor-attachment">
-          <img :src="image" alt="帖子封面" /><button
+          <img :src="publicImage(image)" alt="帖子封面" decoding="async" /><button
             type="button"
             class="icon-btn"
             aria-label="移除图片"

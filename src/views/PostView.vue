@@ -8,6 +8,7 @@ import Avatar from '../components/Avatar.vue';
 import Markdown from '../components/Markdown.vue';
 import EmptyState from '../components/EmptyState.vue';
 import FollowButton from '../components/FollowButton.vue';
+import { publicImage } from '../services/images';
 const store = useCommunity(),
   route = useRoute(),
   router = useRouter(),
@@ -110,9 +111,13 @@ async function copyLink() {
             </button>
           </div>
         </div>
-        <img v-if="post.image" class="article-image" :src="post.image" alt="帖子配图" /><Markdown
-          :content="post.content"
-        />
+        <img
+          v-if="post.image"
+          class="article-image"
+          :src="publicImage(post.image)"
+          alt="帖子配图"
+          decoding="async"
+        /><Markdown :content="post.content" />
         <div class="article-tag-list">
           <RouterLink
             v-for="tag in post.tags"

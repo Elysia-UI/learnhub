@@ -1,0 +1,505 @@
+{
+  "date": "2026-10-28",
+  "conditions": {
+    "downloadBytesPerSecond": 375000,
+    "latencyMs": 60,
+    "cacheDisabled": true,
+    "reducedMotion": true,
+    "desktopViewport": {
+      "width": 1440,
+      "height": 960
+    },
+    "gzipProxyEnabled": false,
+    "singleSample": true,
+    "readOnlyAnonymous": true
+  },
+  "baseline": {
+    "hero": {
+      "name": "http://127.0.0.1:4174/images/hero.png",
+      "entryType": "resource",
+      "startTime": 5083.700000001118,
+      "duration": 18782.199999999255,
+      "navigationId": 2495,
+      "initiatorType": "img",
+      "deliveryType": "",
+      "nextHopProtocol": "http/1.1",
+      "renderBlockingStatus": "non-blocking",
+      "contentType": "image/png",
+      "contentEncoding": "",
+      "workerStart": 0,
+      "workerRouterEvaluationStart": 0,
+      "workerCacheLookupStart": 0,
+      "workerMatchedSourceType": "",
+      "workerFinalSourceType": "",
+      "redirectStart": 0,
+      "redirectEnd": 0,
+      "fetchStart": 5083.700000001118,
+      "domainLookupStart": 5083.700000001118,
+      "domainLookupEnd": 5083.700000001118,
+      "connectStart": 5083.700000001118,
+      "secureConnectionStart": 0,
+      "connectEnd": 5083.700000001118,
+      "requestStart": 5086.800000000745,
+      "responseStart": 5093.9000000003725,
+      "firstInterimResponseStart": 0,
+      "finalResponseHeadersStart": 5093.9000000003725,
+      "responseEnd": 23865.900000000373,
+      "transferSize": 2597288,
+      "encodedBodySize": 2596988,
+      "decodedBodySize": 2596988,
+      "responseStatus": 200,
+      "serverTiming": []
+    },
+    "navigation": {
+      "name": "http://127.0.0.1:4174/",
+      "entryType": "navigation",
+      "startTime": 0,
+      "duration": 4849.4000000003725,
+      "navigationId": 2495,
+      "initiatorType": "navigation",
+      "deliveryType": "",
+      "nextHopProtocol": "http/1.1",
+      "renderBlockingStatus": "non-blocking",
+      "contentType": "text/html",
+      "contentEncoding": "",
+      "workerStart": 0,
+      "workerRouterEvaluationStart": 0,
+      "workerCacheLookupStart": 0,
+      "workerMatchedSourceType": "",
+      "workerFinalSourceType": "",
+      "redirectStart": 0,
+      "redirectEnd": 0,
+      "fetchStart": 1,
+      "domainLookupStart": 3.900000000372529,
+      "domainLookupEnd": 4.200000001117587,
+      "connectStart": 4.200000001117587,
+      "secureConnectionStart": 0,
+      "connectEnd": 4.599999999627471,
+      "requestStart": 4.700000001117587,
+      "responseStart": 14.700000001117587,
+      "firstInterimResponseStart": 0,
+      "finalResponseHeadersStart": 14.700000001117587,
+      "responseEnd": 95.09999999962747,
+      "transferSize": 811,
+      "encodedBodySize": 511,
+      "decodedBodySize": 511,
+      "responseStatus": 200,
+      "serverTiming": [],
+      "unloadEventStart": 99.40000000037253,
+      "unloadEventEnd": 99.40000000037253,
+      "domInteractive": 120.80000000074506,
+      "domContentLoadedEventStart": 2551.5,
+      "domContentLoadedEventEnd": 2608.5,
+      "domComplete": 4849.300000000745,
+      "loadEventStart": 4849.300000000745,
+      "loadEventEnd": 4849.4000000003725,
+      "type": "reload",
+      "redirectCount": 0,
+      "activationStart": 0,
+      "criticalCHRestart": 0,
+      "notRestoredReasons": null,
+      "confidence": {
+        "randomizedTriggerRate": 0.4994798,
+        "value": "low"
+      }
+    },
+    "resources": [
+      {
+        "url": "http://127.0.0.1:4174/assets/index-CTrUjZHW.js",
+        "bytes": 252456,
+        "responseEnd": 1208.0999999996275
+      },
+      {
+        "url": "http://127.0.0.1:4174/assets/index-Crc4Ru0G.css",
+        "bytes": 123359,
+        "responseEnd": 852.2000000011176
+      },
+      {
+        "url": "https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700;800&display=swap",
+        "bytes": 154489,
+        "responseEnd": 2512.9000000003725
+      },
+      {
+        "url": "http://127.0.0.1:4174/api/bootstrap",
+        "bytes": 261580,
+        "responseEnd": 5064.5
+      },
+      {
+        "url": "http://127.0.0.1:4174/assets/HomeView-DB6UuSYt.js",
+        "bytes": 8327,
+        "responseEnd": 2685.5
+      },
+      {
+        "url": "http://127.0.0.1:4174/assets/_plugin-vue_export-helper-DlAUqK2U.js",
+        "bytes": 91,
+        "responseEnd": 2621.5999999996275
+      },
+      {
+        "url": "http://127.0.0.1:4174/assets/CourseCard.vue_vue_type_script_setup_true_lang-CNUoNnfc.js",
+        "bytes": 1118,
+        "responseEnd": 2637.800000000745
+      },
+      {
+        "url": "http://127.0.0.1:4174/assets/CourseCover.vue_vue_type_script_setup_true_lang-yxJ1eytP.js",
+        "bytes": 1249,
+        "responseEnd": 2651.800000000745
+      },
+      {
+        "url": "http://127.0.0.1:4174/assets/RightRail.vue_vue_type_script_setup_true_lang-CpylS4ox.js",
+        "bytes": 4206,
+        "responseEnd": 2668.9000000003725
+      },
+      {
+        "url": "http://127.0.0.1:4174/assets/PostRow.vue_vue_type_script_setup_true_lang-CLTTlzvy.js",
+        "bytes": 1941,
+        "responseEnd": 2716.0999999996275
+      },
+      {
+        "url": "http://127.0.0.1:4174/assets/ResourceCard.vue_vue_type_script_setup_true_lang-CHrutKEL.js",
+        "bytes": 985,
+        "responseEnd": 2731.5
+      },
+      {
+        "url": "http://127.0.0.1:4174/assets/HomeView-CnOWG5JS.css",
+        "bytes": 1885,
+        "responseEnd": 2700.9000000003725
+      },
+      {
+        "url": "http://127.0.0.1:4174/favicon.ico",
+        "bytes": 511,
+        "responseEnd": 4939.800000000745
+      },
+      {
+        "url": "http://127.0.0.1:4174/api/leaderboard?pageSize=5",
+        "bytes": 1197,
+        "responseEnd": 5310
+      },
+      {
+        "url": "http://127.0.0.1:4174/api/topics",
+        "bytes": 5405,
+        "responseEnd": 5233.5999999996275
+      },
+      {
+        "url": "http://127.0.0.1:4174/images/hero.png",
+        "bytes": 2596988,
+        "responseEnd": 23865.900000000373
+      },
+      {
+        "url": "http://127.0.0.1:4174/images/community/portrait-2.jpg",
+        "bytes": 5333,
+        "responseEnd": 5295.4000000003725
+      },
+      {
+        "url": "http://127.0.0.1:4174/images/community/portrait-3.jpg",
+        "bytes": 5847,
+        "responseEnd": 5311.4000000003725
+      },
+      {
+        "url": "http://127.0.0.1:4174/images/community/portrait-4.jpg",
+        "bytes": 4493,
+        "responseEnd": 5352.0999999996275
+      },
+      {
+        "url": "http://127.0.0.1:4174/images/community/coding.jpg",
+        "bytes": 91232,
+        "responseEnd": 7243.5999999996275
+      },
+      {
+        "url": "http://127.0.0.1:4174/images/community/library.jpg",
+        "bytes": 206893,
+        "responseEnd": 9838.800000000745
+      },
+      {
+        "url": "/api/uploads/[public-avatar]",
+        "bytes": 1233101,
+        "responseEnd": 18145.700000001118
+      },
+      {
+        "url": "http://127.0.0.1:4174/images/community/art.jpg",
+        "bytes": 108459,
+        "responseEnd": 7540.4000000003725
+      },
+      {
+        "url": "http://127.0.0.1:4174/images/community/desk.jpg",
+        "bytes": 101221,
+        "responseEnd": 7462.200000001118
+      },
+      {
+        "url": "http://127.0.0.1:4174/images/community/ai-workbench.png",
+        "bytes": 2270189,
+        "responseEnd": 23066.300000000745
+      },
+      {
+        "url": "http://127.0.0.1:4174/images/community/portrait-6.jpg",
+        "bytes": 7177,
+        "responseEnd": 5696.800000000745
+      }
+    ]
+  },
+  "afterStaticOptimization": {
+    "hero": {
+      "name": "http://127.0.0.1:4173/images/optimized/hero.webp",
+      "entryType": "resource",
+      "startTime": 2501.9000000003725,
+      "duration": 1742.199999999255,
+      "navigationId": 8836,
+      "initiatorType": "img",
+      "deliveryType": "",
+      "nextHopProtocol": "http/1.1",
+      "renderBlockingStatus": "non-blocking",
+      "contentType": "image/webp",
+      "contentEncoding": "",
+      "workerStart": 0,
+      "workerRouterEvaluationStart": 0,
+      "workerCacheLookupStart": 0,
+      "workerMatchedSourceType": "",
+      "workerFinalSourceType": "",
+      "redirectStart": 0,
+      "redirectEnd": 0,
+      "fetchStart": 2501.9000000003725,
+      "domainLookupStart": 2501.9000000003725,
+      "domainLookupEnd": 2501.9000000003725,
+      "connectStart": 2501.9000000003725,
+      "secureConnectionStart": 0,
+      "connectEnd": 2501.9000000003725,
+      "requestStart": 2504.4000000003725,
+      "responseStart": 2505.9000000003725,
+      "firstInterimResponseStart": 0,
+      "finalResponseHeadersStart": 2505.9000000003725,
+      "responseEnd": 4244.0999999996275,
+      "transferSize": 220056,
+      "encodedBodySize": 219756,
+      "decodedBodySize": 219756,
+      "responseStatus": 200,
+      "serverTiming": []
+    },
+    "navigation": {
+      "name": "http://127.0.0.1:4173/",
+      "entryType": "navigation",
+      "startTime": 0,
+      "duration": 1524.7999999988824,
+      "navigationId": 8836,
+      "initiatorType": "navigation",
+      "deliveryType": "",
+      "nextHopProtocol": "http/1.1",
+      "renderBlockingStatus": "non-blocking",
+      "contentType": "text/html",
+      "contentEncoding": "",
+      "workerStart": 0,
+      "workerRouterEvaluationStart": 0,
+      "workerCacheLookupStart": 0,
+      "workerMatchedSourceType": "",
+      "workerFinalSourceType": "",
+      "redirectStart": 0,
+      "redirectEnd": 0,
+      "fetchStart": 0.900000000372529,
+      "domainLookupStart": 3.900000000372529,
+      "domainLookupEnd": 3.900000000372529,
+      "connectStart": 3.900000000372529,
+      "secureConnectionStart": 0,
+      "connectEnd": 4.5,
+      "requestStart": 4.599999999627471,
+      "responseStart": 7.699999999254942,
+      "firstInterimResponseStart": 0,
+      "finalResponseHeadersStart": 7.699999999254942,
+      "responseEnd": 95.90000000037253,
+      "transferSize": 811,
+      "encodedBodySize": 511,
+      "decodedBodySize": 511,
+      "responseStatus": 200,
+      "serverTiming": [],
+      "unloadEventStart": 0,
+      "unloadEventEnd": 0,
+      "domInteractive": 255.69999999925494,
+      "domContentLoadedEventStart": 1343.199999999255,
+      "domContentLoadedEventEnd": 1369.699999999255,
+      "domComplete": 1524.5999999996275,
+      "loadEventStart": 1524.5999999996275,
+      "loadEventEnd": 1524.7999999988824,
+      "type": "navigate",
+      "redirectCount": 0,
+      "activationStart": 0,
+      "criticalCHRestart": 0,
+      "notRestoredReasons": null,
+      "confidence": {
+        "randomizedTriggerRate": 0.4994798,
+        "value": "high"
+      }
+    },
+    "resources": [
+      {
+        "url": "http://127.0.0.1:4173/assets/index-DXZ3fE9d.js",
+        "bytes": 258895,
+        "responseEnd": 1318.4000000003725
+      },
+      {
+        "url": "http://127.0.0.1:4173/assets/index-B3RtzoFB.css",
+        "bytes": 123270,
+        "responseEnd": 962.0999999996275
+      },
+      {
+        "url": "http://127.0.0.1:4173/api/bootstrap",
+        "bytes": 261580,
+        "responseEnd": 2486.9000000003725
+      },
+      {
+        "url": "http://127.0.0.1:4173/assets/HomeView-C4130rFb.js",
+        "bytes": 9498,
+        "responseEnd": 1472.7999999988824
+      },
+      {
+        "url": "http://127.0.0.1:4173/assets/_plugin-vue_export-helper-DlAUqK2U.js",
+        "bytes": 91,
+        "responseEnd": 1427.699999999255
+      },
+      {
+        "url": "http://127.0.0.1:4173/assets/RightRail.vue_vue_type_script_setup_true_lang-dbvBO2qa.js",
+        "bytes": 4201,
+        "responseEnd": 1457.7999999988824
+      },
+      {
+        "url": "http://127.0.0.1:4173/assets/CourseCard.vue_vue_type_script_setup_true_lang-C1-gN0yV.js",
+        "bytes": 1118,
+        "responseEnd": 1427.9000000003725
+      },
+      {
+        "url": "http://127.0.0.1:4173/assets/CourseCover.vue_vue_type_script_setup_true_lang-DTEFtwtq.js",
+        "bytes": 1281,
+        "responseEnd": 1441.699999999255
+      },
+      {
+        "url": "http://127.0.0.1:4173/assets/ResourceCard.vue_vue_type_script_setup_true_lang-BedgHLlD.js",
+        "bytes": 985,
+        "responseEnd": 1520
+      },
+      {
+        "url": "http://127.0.0.1:4173/assets/PostRow.vue_vue_type_script_setup_true_lang-DaN2E6ZL.js",
+        "bytes": 1966,
+        "responseEnd": 1520.2999999988824
+      },
+      {
+        "url": "http://127.0.0.1:4173/assets/HomeView-DCd-n7QO.css",
+        "bytes": 1885,
+        "responseEnd": 1521.4000000003725
+      },
+      {
+        "url": "http://127.0.0.1:4173/favicon.ico",
+        "bytes": 511,
+        "responseEnd": 1611.7999999988824
+      },
+      {
+        "url": "http://127.0.0.1:4173/api/leaderboard?pageSize=5",
+        "bytes": 1197,
+        "responseEnd": 2766
+      },
+      {
+        "url": "http://127.0.0.1:4173/api/topics",
+        "bytes": 5405,
+        "responseEnd": 2702.5999999996275
+      },
+      {
+        "url": "http://127.0.0.1:4173/images/optimized/hero.webp",
+        "bytes": 219756,
+        "responseEnd": 4244.0999999996275
+      },
+      {
+        "url": "http://127.0.0.1:4173/images/optimized/coding.webp",
+        "bytes": 33172,
+        "responseEnd": 3291.5
+      },
+      {
+        "url": "http://127.0.0.1:4173/images/optimized/portrait-2.webp",
+        "bytes": 3700,
+        "responseEnd": 2719.0999999996275
+      },
+      {
+        "url": "http://127.0.0.1:4173/images/optimized/portrait-3.webp",
+        "bytes": 4188,
+        "responseEnd": 2921.2999999988824
+      },
+      {
+        "url": "http://127.0.0.1:4173/images/optimized/art.webp",
+        "bytes": 56334,
+        "responseEnd": 3416.2999999988824
+      },
+      {
+        "url": "http://127.0.0.1:4173/images/optimized/ai-workbench.webp",
+        "bytes": 98478,
+        "responseEnd": 3736.7999999988824
+      },
+      {
+        "url": "http://127.0.0.1:4173/images/optimized/portrait-4.webp",
+        "bytes": 3002,
+        "responseEnd": 3060.0999999996275
+      },
+      {
+        "url": "http://127.0.0.1:4173/images/optimized/desk.webp",
+        "bytes": 46980,
+        "responseEnd": 3414.5999999996275
+      },
+      {
+        "url": "/api/uploads/[public-avatar]",
+        "bytes": 1233101,
+        "responseEnd": 7258
+      },
+      {
+        "url": "http://127.0.0.1:4173/images/optimized/portrait-6.webp",
+        "bytes": 6198,
+        "responseEnd": 3246.5
+      }
+    ],
+    "image": {
+      "src": "http://127.0.0.1:4173/images/optimized/hero.webp",
+      "width": 1200
+    },
+    "overflow": false
+  },
+  "mobile": {
+    "hero": {
+      "name": "http://127.0.0.1:4173/images/optimized/hero-960.webp",
+      "entryType": "resource",
+      "startTime": 2311,
+      "duration": 747.2999999988824,
+      "navigationId": 2220,
+      "initiatorType": "img",
+      "deliveryType": "",
+      "nextHopProtocol": "http/1.1",
+      "renderBlockingStatus": "non-blocking",
+      "contentType": "image/webp",
+      "contentEncoding": "",
+      "workerStart": 0,
+      "workerRouterEvaluationStart": 0,
+      "workerCacheLookupStart": 0,
+      "workerMatchedSourceType": "",
+      "workerFinalSourceType": "",
+      "redirectStart": 0,
+      "redirectEnd": 0,
+      "fetchStart": 2311,
+      "domainLookupStart": 2311,
+      "domainLookupEnd": 2311,
+      "connectStart": 2311,
+      "secureConnectionStart": 0,
+      "connectEnd": 2311,
+      "requestStart": 2312.5999999996275,
+      "responseStart": 2318.7999999988824,
+      "firstInterimResponseStart": 0,
+      "finalResponseHeadersStart": 2318.7999999988824,
+      "responseEnd": 3058.2999999988824,
+      "transferSize": 72310,
+      "encodedBodySize": 72010,
+      "decodedBodySize": 72010,
+      "responseStatus": 200,
+      "serverTiming": []
+    },
+    "image": [
+      {
+        "src": "http://127.0.0.1:4173/images/optimized/hero-960.webp",
+        "complete": true,
+        "width": 375
+      }
+    ],
+    "viewport": 375,
+    "documentWidth": 360,
+    "scrollWidth": 360
+  }
+}

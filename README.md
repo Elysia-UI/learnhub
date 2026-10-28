@@ -58,11 +58,14 @@ npm run accounts:show -- u1       # 一个学生演示账号
 ## 检查
 
 ```powershell
-npm run test:unit  # 30 项前端单元测试
+npm run test:unit  # 37 项前端单元测试（含图片与轮播加载）
+npm run test:assets # 15 项图片与生产缓存测试，无需数据库
 npm run test:api   # 27 项真实 HTTP + 云 MySQL 集成测试
 npm run db:verify  # 数据规模、关联、实际文件及权限检查
 npm run build     # TypeScript 检查和生产构建
 ```
+
+已为 3Mbps 访问压缩公共图片并优化轮播加载和生产缓存，见[低带宽优化记录](docs/performance-optimization-2026-10-28.md)。更新原图后可运行 `npm run images:optimize` 重新编码，原图保留。
 
 接口测试建立随机虚拟账号和内容，结束后仅清理本轮明确创建的记录，部分审计日志保留。请在验收环境执行。
 

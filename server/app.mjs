@@ -19,6 +19,7 @@ import { publicUser } from './security.mjs';
 import { adminRoutes } from './routes/admin.mjs';
 import { socialRoutes } from './routes/social.mjs';
 import { chatRoutes } from './routes/chat.mjs';
+import { mountProductionStatic } from './static.mjs';
 export const app = express();
 app.disable('x-powered-by');
 app.use((req, res, next) => {
@@ -111,8 +112,7 @@ app.get('/api/bootstrap', async (req, res) => {
 app.get('/api/stats', async (_req, res) => res.json({ data: await stats() }));
 app.use('/api', (_req, _res, next) => next(new HttpError(404, '接口不存在', 'NOT_FOUND')));
 if (config.production) {
-  app.use(express.static(path.join(root, 'dist')));
-  app.get('/{*path}', (_req, res) => res.sendFile(path.join(root, 'dist/index.html')));
+  mountProductionStatic(app, path.join(root, 'dist'));
 }
 app.use((error, req, res, _next) => {
   const status =

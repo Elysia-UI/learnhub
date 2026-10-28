@@ -17,6 +17,7 @@ import {
   HttpError,
 } from '../security.mjs';
 import { audit } from '../services/activity.mjs';
+import { createAvatarResponder } from '../services/avatar-images.mjs';
 export const resourceRoutes = Router();
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -84,11 +85,7 @@ resourceRoutes.post('/uploads', auth, upload, async (req, res) => {
   await writeFile(path.join(storageDir, filename), req.file.buffer, { flag: 'wx' });
   res.status(201).json({ data: { url: `/api/uploads/${filename}` } });
 });
-resourceRoutes.get('/uploads/:name', async (req, res) => {
-  assert(/^avatar-[a-zA-Z0-9_-]+\.(png|jpg|jpeg|webp)$/.test(req.params.name), 404, '图片不存在');
-  res.set('Cache-Control', 'public,max-age=3600');
-  res.sendFile(path.join(storageDir, req.params.name), { dotfiles: 'allow' });
-});
+resourceRoutes.get('/uploads/:name', createAvatarResponder(storageDir));
 resourceRoutes.post('/resources', auth, upload, async (req, res) => {
   const v = validate(
     z

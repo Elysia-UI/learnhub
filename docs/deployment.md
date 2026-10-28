@@ -50,6 +50,77 @@ production 模式下 Express 提供 dist、页面路由回退及 API。用 Nginx
 
 Vite preview 只预览产物，不能替代后端，/api 也需要代理。日常验收用 npm start。
 
+## 低带宽静态资源传输
+
+生产服务只公开 `dist` 目录。`dist/assets` 中带内容哈希的构建文件缓存一年并标记 `immutable`；公共 `dist/images` 图片缓存一天，过期后用 ETag / Last-Modified 验证。首页、页面路由回退和其他不带哈希的文件使用 `no-cache`，允许验证后复用，但不会长期保留旧页面入口。更换同名公共图片时应更新文件名或引用版本，保证已有访问者及时取得新图。
+
+这些缓存规则在 API 路由之后挂载，不改变用户资料、登录会话、私聊、资源权限下载等业务接口的原有权限与缓存策略，不将私有文件目录暴露为静态文件。
+
+用户上传头像继续使用原 `/api/uploads/avatar-*.png|jpg|jpeg|webp` URL 和数据库记录。明确发送 `Accept: image/webp` 且未设 `q=0` 的客户端，可取得更小的 320px WebP 副本；其他客户端取得原文件，响应均带 `Vary: Accept`，保留一小时缓存及对应文件的 ETag。原图不覆盖，副本存于 `STORAGE_DIR/.avatar-cache`，没有公开缓存目录路由。缓存可丢弃重建，备份以原上传文件为准。生产安装需要 `sharp` 依赖。
+
+头像转换最多两项同时运行、最多等待十六项；同一原文件合并转换并按原文件名、大小与更新时间复用缓存。小于 32KiB、大于 2MiB、超过八百万像素、动画 WebP、解码失败或转换后反而更大的文件保持原图。队列已满时也返回原图，避免挤占小服务器内存。独立验证命令：`node --test server/tests/avatar-images.test.mjs`，不连接数据库。
+
+小服务器优先在反向代理压缩文本响应，不在每次 Node 请求中压缩大文件。以下 Nginx 示例继承 Express 的缓存头，为 HTML / CSS / JS / JSON / SVG 启用 gzip；JPEG / PNG / WebP 已编码，不重复 gzip。好友聊天 SSE 与 AI 增量输出分别关闭压缩和缓冲，保证即时送达。本轮仅验证 Express 缓存行为，尚未在公网服务器安装或启动此 Nginx 配置。
+
+```nginx
+server {
+    listen 80;
+    server_name learnhub.example.com;
+    return 301 https://$host$request_uri;
+}
+
+server {
+    listen 443 ssl;
+    server_name learnhub.example.com;
+    ssl_certificate     /etc/nginx/tls/learnhub.fullchain.pem;
+    ssl_certificate_key /etc/nginx/tls/learnhub.key;
+
+    client_max_body_size 12m;
+    gzip on;
+    gzip_vary on;
+    gzip_min_length 1024;
+    gzip_comp_level 5;
+    gzip_proxied any;
+    gzip_types text/css application/javascript application/json image/svg+xml;
+
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header Connection "";
+
+    location = /api/chat/events {
+        gzip off;
+        proxy_buffering off;
+        proxy_cache off;
+        proxy_read_timeout 90s;
+        proxy_pass http://127.0.0.1:3001;
+    }
+
+    # AI 返回 application/x-ndjson 增量内容，保持即时输出。
+    location ^~ /api/ai/ {
+        gzip off;
+        proxy_buffering off;
+        proxy_cache off;
+        proxy_read_timeout 180s;
+        proxy_pass http://127.0.0.1:3001;
+    }
+
+    location /api/ {
+        proxy_cache off;
+        proxy_pass http://127.0.0.1:3001;
+    }
+
+    location / {
+        proxy_pass http://127.0.0.1:3001;
+    }
+}
+```
+
+部署时替换域名、证书和后端端口。若原服务器 3001 已供机器人使用，LearnHub 设置 `API_PORT=3002`，同时将上述四处代理端口统一改为 3002。先执行 `nginx -t`，成功后再重载。不要增加把所有 `/api` 响应缓存或长期缓存 HTML 的规则。
+
+独立缓存测试无需数据库：`node --test server/tests/static-assets.test.mjs`。公网验证可使用 `curl -I https://实际域名/` 检查 HTML 的 `Cache-Control: no-cache`，对真实 `/assets/文件名-哈希.js` 验证 `immutable`，用 `curl --compressed -I https://实际域名/assets/文件名-哈希.js` 检查代理的压缩响应头。
+
 ## 备份与迁移
 
 - 备份 learnhub 数据库，同时备份 STORAGE_DIR 实际文件，验证恢复一致。

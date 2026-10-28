@@ -17,12 +17,14 @@
     "start:production": "node server/index.mjs",
     "dev:api": "node --watch server/index.mjs",
     "test:unit": "vitest run",
+    "test:assets": "node --test server/tests/static-assets.test.mjs server/tests/avatar-images.test.mjs",
     "db:init": "node scripts/init-db.mjs",
     "db:migrate": "node server/migrate.mjs",
     "serve:api": "node server/index.mjs",
     "db:verify": "node scripts/verify-db.mjs",
     "db:enrich": "node server/enrich-demo.mjs",
     "demo:media": "node scripts/fetch-demo-media.mjs",
+    "images:optimize": "node scripts/optimize-images.mjs",
     "demo:verify": "node scripts/verify-community.mjs"
   },
   "dependencies": {
@@ -39,6 +41,7 @@
     "multer": "^2.5.0",
     "mysql2": "^3.24.6",
     "pinia": "^3.0.3",
+    "sharp": "0.35.5",
     "vue": "^3.5.22",
     "vue-router": "^4.6.3",
     "zod": "^4.6.7"

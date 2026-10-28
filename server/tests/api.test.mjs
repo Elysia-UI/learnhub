@@ -158,6 +158,7 @@ before(async () => {
 });
 after(async () => {
   try {
+    if (admin?.cookie) await admin.call('/api/auth/logout', 'POST').catch(() => {});
     if (resourceId)
       await query('DELETE FROM resources WHERE id=? AND author_id=?', [resourceId, alice.id]);
     if (courseId)

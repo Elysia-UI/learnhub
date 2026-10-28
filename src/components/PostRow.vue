@@ -4,6 +4,7 @@ import { useCommunity } from '../stores/community';
 import { timeAgo, count } from '../services/format';
 import Avatar from './Avatar.vue';
 import Icon from './Icon.vue';
+import { publicImage } from '../services/images';
 defineProps<{ post: Post; compact?: boolean }>();
 const store = useCommunity();
 </script>
@@ -46,7 +47,7 @@ const store = useCommunity();
       </div>
     </div>
     <RouterLink v-if="post.image" :to="`/forum/${post.id}`" class="post-thumbnail"
-      ><img :src="post.image" alt="帖子配图" loading="lazy"
+      ><img :src="publicImage(post.image)" alt="帖子配图" loading="lazy" decoding="async"
     /></RouterLink>
   </article>
 </template>

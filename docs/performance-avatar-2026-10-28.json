@@ -1,0 +1,21 @@
+{
+  "date": "2026-10-28",
+  "original": {
+    "status": 200,
+    "bytes": 1233101,
+    "type": "image/png",
+    "vary": "Accept",
+    "cacheControl": "public,max-age=3600",
+    "timeMs": 15
+  },
+  "optimized": {
+    "status": 200,
+    "bytes": 3876,
+    "type": "image/webp",
+    "vary": "Accept",
+    "cacheControl": "public,max-age=3600",
+    "timeMs": 84,
+    "revalidationStatus": 304
+  },
+  "savedPercent": 99.7
+}
